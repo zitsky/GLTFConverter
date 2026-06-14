@@ -22,6 +22,18 @@ export class PickingService {
     return hits.find((h) => (h.object as THREE.Mesh).isMesh) ?? hits[0] ?? null
   }
 
+  /** Raycast a specific set of objects (e.g. light marker sprites). */
+  pickObjects(event: PointerEvent, objects: THREE.Object3D[]): THREE.Intersection | null {
+    if (objects.length === 0) return null
+    const rect = this.dom.getBoundingClientRect()
+    this.pointer.set(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    this.raycaster.setFromCamera(this.pointer, this.camera)
+    return this.raycaster.intersectObjects(objects, false)[0] ?? null
+  }
+
   raycasterFor(event: PointerEvent): THREE.Raycaster {
     const rect = this.dom.getBoundingClientRect()
     this.pointer.set(

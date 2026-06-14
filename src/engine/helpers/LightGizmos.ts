@@ -61,6 +61,11 @@ export class LightGizmos {
     this.selected = light
   }
 
+  /** Source icons, raycastable so lights can be clicked in the viewport. */
+  pickables(): THREE.Object3D[] {
+    return [...this.entries.values()].map((e) => e.sprite)
+  }
+
   update(): void {
     const v = new THREE.Vector3()
     const q = new THREE.Quaternion()
@@ -96,6 +101,7 @@ export class LightGizmos {
     })
     const sprite = new THREE.Sprite(material)
     sprite.renderOrder = 998
+    sprite.userData.nodeId = light.userData.nodeId
     this.scene.add(sprite)
 
     let helper: DisposableHelper | undefined

@@ -13,11 +13,13 @@ import type { TransformMode } from './gizmos/TransformGizmo.ts'
 import { VertexEditor } from './subobject/VertexEditor.ts'
 import type { SubObjectMode } from './subobject/SubObjectMode.ts'
 import { LightGizmos } from './helpers/LightGizmos.ts'
+import { LightControls } from './helpers/LightControls.ts'
 
 export interface EngineCallbacks {
   onSelect?: (nodeId: NodeId | null) => void
   onTransformCommit?: (nodeId: NodeId, transform: Transform) => void
   onGeometryCommit?: (nodeId: NodeId) => void
+  onLightIntensity?: (nodeId: NodeId, intensity: number) => void
 }
 
 export type ViewDir = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'iso'
@@ -53,6 +55,7 @@ export class Engine {
   private picking: PickingService
   private vertexEditor: VertexEditor
   private lightGizmos: LightGizmos
+  private lightControls: LightControls
   private viewHelper: ViewHelper
   private clock = new THREE.Clock()
   private callbacks: EngineCallbacks = {}
@@ -112,6 +115,23 @@ export class Engine {
     }
     this.wireGizmo()
     this.wirePointer()
+
+    // Created after wirePointer so its pointer listeners run after the engine's
+    // (so pointerup selection still sees isDragging() === true on release).
+    this.lightControls = new LightControls(this.scene, this.viewport.camera, this.renderer.domElement)
+    this.lightControls.onDragChange = (d) => {
+      this.viewport.controls.enabled = !d
+    }
+    this.lightControls.callbacks = {
+      onAimCommit: (id) => {
+        const obj = this.sync.object3dFor(id)
+        if (obj) this.callbacks.onTransformCommit?.(id, readTransform(obj))
+      },
+      onIntensityCommit: (id) => {
+        const obj = this.sync.object3dFor(id)
+        if (obj instanceof THREE.Light) this.callbacks.onLightIntensity?.(id, obj.intensity)
+      },
+    }
 
     this.sync.sync(project)
     this.refreshLightGizmos(project)
@@ -224,6 +244,11 @@ export class Engine {
     if (obj) this.gizmo.attach(obj)
     else this.gizmo.detach()
     this.lightGizmos.setSelected(obj instanceof THREE.Light ? obj : null)
+    if (this.selectedId && obj instanceof THREE.Light) {
+      this.lightControls.attach(this.selectedId, obj)
+    } else {
+      this.lightControls.detach()
+    }
   }
 
   private refreshVertexEditor(): void {
@@ -326,12 +351,18 @@ export class Engine {
     dom.addEventListener('pointerup', (e) => {
       // Let the navigation gizmo consume clicks in its corner first.
       if (this.viewHelper.handleClick(e)) return
-      if (this.gizmoDragging || this.vertexEditor.isDragging()) return
+      if (this.gizmoDragging || this.vertexEditor.isDragging() || this.lightControls.isDragging())
+        return
       const moved = Math.hypot(e.clientX - this.pointerDown.x, e.clientY - this.pointerDown.y)
       if (moved > 5) return // it was an orbit drag
       if (this.subObjectMode !== 'object') return // sub-object handles its own picking
       const hit = this.picking.pick(e, this.contentRoot)
-      const id = hit ? this.sync.nodeIdOf(hit.object) : null
+      let id = hit ? this.sync.nodeIdOf(hit.object) : null
+      if (!id) {
+        // Fall back to the always-visible light source markers.
+        const lightHit = this.picking.pickObjects(e, this.lightGizmos.pickables())
+        id = (lightHit?.object.userData.nodeId as NodeId | undefined) ?? null
+      }
       this.callbacks.onSelect?.(id)
     })
   }
@@ -344,6 +375,7 @@ export class Engine {
       this.viewport.update()
       this.selection.update()
       this.lightGizmos.update()
+      this.lightControls.update()
       this.renderer.render(this.scene, this.viewport.camera)
       // ViewHelper renders into a corner; without this its internal render() would
       // autoClear the whole color buffer and wipe the main scene.
@@ -358,6 +390,7 @@ export class Engine {
     cancelAnimationFrame(this.raf)
     this.viewHelper.dispose()
     this.lightGizmos.dispose()
+    this.lightControls.dispose()
     this.wireMaterial.dispose()
     this.gizmo.dispose()
     this.vertexEditor.dispose()

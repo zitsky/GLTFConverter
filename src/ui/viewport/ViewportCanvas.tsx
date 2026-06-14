@@ -21,6 +21,8 @@ export function ViewportCanvas() {
       onSelect: (id) => useEditorStore.getState().select(id),
       onTransformCommit: (id, transform) =>
         useProjectStore.getState().setTransform(id, transform),
+      onLightIntensity: (id, intensity) =>
+        useProjectStore.getState().updateLight(id, { intensity }),
       onGeometryCommit: (id) => {
         const geo = instance.getMeshGeometry(id)
         const node = useProjectStore.getState().project.scene.nodes[id]
