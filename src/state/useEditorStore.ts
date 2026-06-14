@@ -9,8 +9,11 @@ interface EditorState {
   subObjectMode: SubObjectMode
   status: string
   busy: boolean
+  /** Vertex indices selected in the UV editor (driven by model clicks too). */
+  uvSelection: number[]
 
   select: (id: NodeId | null) => void
+  setUvSelection: (indices: number[]) => void
   setTransformMode: (mode: TransformMode) => void
   setSubObjectMode: (mode: SubObjectMode) => void
   setStatus: (status: string) => void
@@ -23,8 +26,10 @@ export const useEditorStore = create<EditorState>((set) => ({
   subObjectMode: 'object',
   status: 'Готово',
   busy: false,
+  uvSelection: [],
 
   select: (id) => set({ selectedId: id }),
+  setUvSelection: (uvSelection) => set({ uvSelection }),
   setTransformMode: (mode) => set({ transformMode: mode }),
   setSubObjectMode: (mode) => set({ subObjectMode: mode }),
   setStatus: (status) => set({ status }),

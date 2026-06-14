@@ -11,13 +11,18 @@ export function UVEditorModal({ onClose }: { onClose: () => void }) {
   const node = useProjectStore((s) => (selectedId ? s.project.scene.nodes[selectedId] : undefined))
   const mesh = node && isMeshNode(node) ? node : null
 
+  const setUvSelection = useEditorStore((s) => s.setUvSelection)
   useEffect(() => {
+    setUvSelection([])
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      setUvSelection([])
+    }
+  }, [onClose, setUvSelection])
 
   return (
     <div className="modal-backdrop" onClick={onClose}>

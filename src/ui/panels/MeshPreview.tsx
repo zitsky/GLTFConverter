@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { MeshNode } from '../../domain/nodes/SceneNode.ts'
 import { AssetFactory } from '../../engine/asset/AssetFactory.ts'
+import { useEditorStore } from '../../state/useEditorStore.ts'
 import { useProjectStore } from '../../state/useProjectStore.ts'
 
 /** Self-contained interactive 3D preview of one mesh, with its material/texture. */
@@ -48,6 +49,32 @@ export function MeshPreview({ node }: { node: MeshNode }) {
       .copy(sphere.center)
       .add(new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist))
 
+    // Click a face on the model to select its UV vertices in the editor.
+    const raycaster = new THREE.Raycaster()
+    const ndc = new THREE.Vector2()
+    const down = { x: 0, y: 0 }
+    const onDown = (e: PointerEvent) => {
+      down.x = e.clientX
+      down.y = e.clientY
+    }
+    const onUp = (e: PointerEvent) => {
+      if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return
+      const rect = renderer.domElement.getBoundingClientRect()
+      ndc.set(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      )
+      raycaster.setFromCamera(ndc, camera)
+      const hit = raycaster.intersectObject(mesh, false)[0]
+      if (!hit?.face) return
+      const { a, b, c } = hit.face
+      const store = useEditorStore.getState()
+      const base = e.shiftKey ? store.uvSelection : []
+      store.setUvSelection([...new Set([...base, a, b, c])])
+    }
+    renderer.domElement.addEventListener('pointerdown', onDown)
+    renderer.domElement.addEventListener('pointerup', onUp)
+
     const resize = () => {
       const w = container.clientWidth || 1
       const h = container.clientHeight || 1
@@ -69,6 +96,8 @@ export function MeshPreview({ node }: { node: MeshNode }) {
 
     return () => {
       cancelAnimationFrame(raf)
+      renderer.domElement.removeEventListener('pointerdown', onDown)
+      renderer.domElement.removeEventListener('pointerup', onUp)
       ro.disconnect()
       controls.dispose()
       factory.dispose()

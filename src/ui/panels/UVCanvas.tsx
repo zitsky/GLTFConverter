@@ -28,6 +28,7 @@ export function UVCanvas() {
   const textures = useProjectStore((s) => s.project.assets.textures)
   const setGeometryUV = useProjectStore((s) => s.setGeometryUV)
 
+  const uvSelection = useEditorStore((s) => s.uvSelection)
   const node = selectedId ? nodes[selectedId] : undefined
   const mesh = node && isMeshNode(node) ? node : null
   const geometry = mesh ? geometries[mesh.geometryId] : null
@@ -57,6 +58,13 @@ export function UVCanvas() {
     draw()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geometry])
+
+  // Selection driven from the 3D model preview.
+  useEffect(() => {
+    selRef.current = new Set(uvSelection)
+    draw()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uvSelection])
 
   useEffect(() => {
     if (!mapUrl || !showTexture) {
