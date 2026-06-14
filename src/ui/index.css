@@ -720,6 +720,49 @@ button.mini {
   gap: 8px;
 }
 
+/* UV editor modal */
+.uv-modal {
+  width: 1100px;
+  max-width: 95vw;
+  height: 78vh;
+  display: flex;
+  flex-direction: column;
+}
+.uv-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.uv-modal-head h2 {
+  margin: 0;
+}
+.uv-modal-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.uv-modal-preview,
+.uv-modal-canvas {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mesh-preview {
+  flex: 1;
+  min-height: 0;
+  background: #05060b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.uv-modal-canvas {
+  overflow-y: auto;
+}
+
 /* Material preset picker */
 .preset-modal {
   width: 560px;
