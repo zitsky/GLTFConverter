@@ -1,133 +1,148 @@
 import { useEffect, useState } from 'react'
-import type { ViewDir, ViewportSettings } from '../../engine/Engine.ts'
+import type { ViewportSettings } from '../../engine/Engine.ts'
 import { useEngineStore } from '../../state/useEngineStore.ts'
 import { useProjectStore } from '../../state/useProjectStore.ts'
 import { Icon } from '../icons/Icon.tsx'
 import { hexStringToRgb, rgbToHexString } from '../panels/Inspector/widgets.tsx'
 
-const QUICK_VIEWS: { dir: ViewDir; label: string }[] = [
-  { dir: 'front', label: 'Спер.' },
-  { dir: 'back', label: 'Сзади' },
-  { dir: 'left', label: 'Слева' },
-  { dir: 'right', label: 'Справа' },
-  { dir: 'top', label: 'Сверху' },
-  { dir: 'bottom', label: 'Снизу' },
-]
+const DEFAULTS: ViewportSettings = {
+  grid: true,
+  axes: true,
+  wireframe: false,
+  fov: 50,
+  snap: false,
+  snapSize: 0.5,
+}
 
+/**
+ * Viewport HUD. The rotating navigation gizmo is drawn by the engine
+ * (three ViewHelper) in the bottom-right corner; this panel holds the
+ * Unreal-style view settings.
+ */
 export function ViewportOverlay() {
   const engine = useEngineStore((s) => s.engine)
   const [open, setOpen] = useState(false)
-  const [settings, setSettings] = useState<ViewportSettings>({
-    grid: true,
-    axes: true,
-    wireframe: false,
-    fov: 50,
-  })
-  const background = useProjectStore((s) => s.project.environment.background)
-  const setBackground = useProjectStore((s) => s.setBackground)
+  const [s, setS] = useState<ViewportSettings>(DEFAULTS)
+  const background = useProjectStore((st) => st.project.environment.background)
+  const setBackground = useProjectStore((st) => st.setBackground)
 
   useEffect(() => {
-    if (engine) setSettings(engine.getSettings())
+    if (engine) setS(engine.getSettings())
   }, [engine])
 
-  const view = (dir: ViewDir) => engine?.setView(dir)
-
   const patch = (p: Partial<ViewportSettings>) => {
-    const next = { ...settings, ...p }
-    setSettings(next)
+    const next = { ...s, ...p }
+    setS(next)
     if (!engine) return
     if (p.grid !== undefined) engine.setGridVisible(p.grid)
     if (p.axes !== undefined) engine.setAxesVisible(p.axes)
     if (p.wireframe !== undefined) engine.setWireframe(p.wireframe)
     if (p.fov !== undefined) engine.setFov(p.fov)
+    if (p.snap !== undefined || p.snapSize !== undefined) {
+      engine.setSnap(next.snap, next.snapSize)
+    }
   }
 
   return (
     <div className="viewport-overlay">
-      <div className="view-cube">
-        <svg viewBox="0 0 80 84" width="80" height="84">
-          <polygon
-            className="cube-face"
-            points="40,6 70,23 40,40 10,23"
-            onClick={() => view('top')}
-          />
-          <polygon
-            className="cube-face left"
-            points="10,23 40,40 40,74 10,57"
-            onClick={() => view('front')}
-          />
-          <polygon
-            className="cube-face right"
-            points="70,23 40,40 40,74 70,57"
-            onClick={() => view('right')}
-          />
-          <text x="40" y="26" className="cube-label">
-            TOP
-          </text>
-        </svg>
-        <div className="view-buttons">
-          {QUICK_VIEWS.map((v) => (
-            <button key={v.dir} className="mini" onClick={() => view(v.dir)}>
-              {v.label}
-            </button>
-          ))}
-          <button className="mini" onClick={() => view('iso')}>
-            Изо
-          </button>
-        </div>
-      </div>
-
       <div className="viewport-settings">
-        <button className="icon-btn settings-btn" title="Настройки вьюпорта" onClick={() => setOpen((o) => !o)}>
-          <Icon name={open ? 'collapse' : 'expand'} size={16} />
-          ⚙
+        <button
+          className={`settings-btn${open ? ' active' : ''}`}
+          title="Настройки вьюпорта"
+          onClick={() => setOpen((o) => !o)}
+        >
+          <Icon name="object" size={15} />
+          Вид
         </button>
         {open && (
           <div className="settings-pop">
-            <label className="set-row">
-              <input
-                type="checkbox"
-                checked={settings.grid}
-                onChange={(e) => patch({ grid: e.target.checked })}
-              />
-              Сетка
-            </label>
-            <label className="set-row">
-              <input
-                type="checkbox"
-                checked={settings.axes}
-                onChange={(e) => patch({ axes: e.target.checked })}
-              />
-              Оси
-            </label>
-            <label className="set-row">
-              <input
-                type="checkbox"
-                checked={settings.wireframe}
-                onChange={(e) => patch({ wireframe: e.target.checked })}
-              />
-              Каркас
-            </label>
-            <div className="set-row">
-              <span>FOV</span>
-              <input
-                type="range"
-                min={20}
-                max={100}
-                step={1}
-                value={settings.fov}
-                onChange={(e) => patch({ fov: parseFloat(e.target.value) })}
-              />
-              <span style={{ width: 26 }}>{Math.round(settings.fov)}</span>
+            <div className="set-group">
+              <div className="set-label">Режим отображения</div>
+              <div className="segmented">
+                <button
+                  className={!s.wireframe ? 'active' : ''}
+                  onClick={() => patch({ wireframe: false })}
+                >
+                  Shaded
+                </button>
+                <button
+                  className={s.wireframe ? 'active' : ''}
+                  onClick={() => patch({ wireframe: true })}
+                >
+                  Wireframe
+                </button>
+              </div>
             </div>
-            <div className="set-row">
-              <span style={{ flex: 1 }}>Фон</span>
-              <input
-                type="color"
-                style={{ width: 40 }}
-                value={rgbToHexString(background)}
-                onChange={(e) => setBackground(hexStringToRgb(e.target.value))}
-              />
+
+            <div className="set-group">
+              <div className="set-label">Показать</div>
+              <label className="set-row">
+                <input
+                  type="checkbox"
+                  checked={s.grid}
+                  onChange={(e) => patch({ grid: e.target.checked })}
+                />
+                Сетка
+              </label>
+              <label className="set-row">
+                <input
+                  type="checkbox"
+                  checked={s.axes}
+                  onChange={(e) => patch({ axes: e.target.checked })}
+                />
+                Оси
+              </label>
+            </div>
+
+            <div className="set-group">
+              <div className="set-label">Камера</div>
+              <div className="set-row">
+                <span style={{ width: 34 }}>FOV</span>
+                <input
+                  type="range"
+                  min={20}
+                  max={110}
+                  step={1}
+                  value={s.fov}
+                  onChange={(e) => patch({ fov: parseFloat(e.target.value) })}
+                />
+                <span style={{ width: 28, textAlign: 'right' }}>{Math.round(s.fov)}</span>
+              </div>
+            </div>
+
+            <div className="set-group">
+              <div className="set-label">Привязка</div>
+              <label className="set-row">
+                <input
+                  type="checkbox"
+                  checked={s.snap}
+                  onChange={(e) => patch({ snap: e.target.checked })}
+                />
+                Шаг сетки
+              </label>
+              <div className="set-row">
+                <span style={{ width: 34 }}>Шаг</span>
+                <input
+                  type="number"
+                  step={0.1}
+                  min={0.05}
+                  value={s.snapSize}
+                  disabled={!s.snap}
+                  onChange={(e) => patch({ snapSize: parseFloat(e.target.value) || 0.5 })}
+                />
+              </div>
+            </div>
+
+            <div className="set-group">
+              <div className="set-label">Фон</div>
+              <div className="set-row">
+                <input
+                  type="color"
+                  style={{ width: 44 }}
+                  value={rgbToHexString(background)}
+                  onChange={(e) => setBackground(hexStringToRgb(e.target.value))}
+                />
+              </div>
             </div>
           </div>
         )}

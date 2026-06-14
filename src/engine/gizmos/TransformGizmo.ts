@@ -47,6 +47,13 @@ export class TransformGizmo {
     this.controls.getHelper().visible = enabled
   }
 
+  /** Grid snapping; pass null to disable. */
+  setSnap(translation: number | null): void {
+    this.controls.setTranslationSnap(translation)
+    this.controls.setRotationSnap(translation ? THREE.MathUtils.degToRad(15) : null)
+    this.controls.setScaleSnap(translation ? 0.1 : null)
+  }
+
   dispose(): void {
     this.controls.detach()
     this.controls.dispose()

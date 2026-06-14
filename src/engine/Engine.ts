@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { ViewHelper } from 'three/examples/jsm/helpers/ViewHelper.js'
 import type { Project } from '../domain/project/Project.ts'
 import type { NodeId } from '../domain/scene/ids.ts'
 import type { Transform } from '../domain/scene/Transform.ts'
@@ -25,6 +26,8 @@ export interface ViewportSettings {
   axes: boolean
   wireframe: boolean
   fov: number
+  snap: boolean
+  snapSize: number
 }
 
 const VIEW_DIRS: Record<ViewDir, THREE.Vector3> = {
@@ -49,12 +52,21 @@ export class Engine {
   private picking: PickingService
   private vertexEditor: VertexEditor
   private lightHelpers: LightHelperManager
+  private viewHelper: ViewHelper
+  private clock = new THREE.Clock()
   private callbacks: EngineCallbacks = {}
 
   private grid!: THREE.GridHelper
   private axes!: THREE.AxesHelper
   private wireMaterial = new THREE.MeshBasicMaterial({ wireframe: true, color: 0x9fb4d4 })
-  private settings: ViewportSettings = { grid: true, axes: true, wireframe: false, fov: 50 }
+  private settings: ViewportSettings = {
+    grid: true,
+    axes: true,
+    wireframe: false,
+    fov: 50,
+    snap: false,
+    snapSize: 0.5,
+  }
 
   private selectedId: NodeId | null = null
   private gizmoDragging = false
@@ -86,6 +98,10 @@ export class Engine {
     this.gizmo = new TransformGizmo(this.viewport.camera, this.renderer.domElement, this.scene)
     this.vertexEditor = new VertexEditor(this.viewport.camera, this.renderer.domElement)
     this.lightHelpers = new LightHelperManager(this.scene)
+
+    // Blender-style navigation gizmo: rotates with the camera, click to snap.
+    this.viewHelper = new ViewHelper(this.viewport.camera, this.renderer.domElement)
+    this.viewHelper.center = this.viewport.controls.target
 
     this.vertexEditor.onDragChange = (dragging) => {
       this.viewport.controls.enabled = !dragging
@@ -239,6 +255,13 @@ export class Engine {
     this.viewport.camera.updateProjectionMatrix()
   }
 
+  /** Grid snapping for the transform gizmo. */
+  setSnap(enabled: boolean, size = this.settings.snapSize): void {
+    this.settings.snap = enabled
+    this.settings.snapSize = size
+    this.gizmo.setSnap(enabled ? size : null)
+  }
+
   /** Snap the camera to a named orthographic-style view, keeping the orbit target. */
   setView(dir: ViewDir): void {
     const target = this.viewport.controls.target.clone()
@@ -268,6 +291,8 @@ export class Engine {
       this.pointerDown = { x: e.clientX, y: e.clientY, time: performance.now() }
     })
     dom.addEventListener('pointerup', (e) => {
+      // Let the navigation gizmo consume clicks in its corner first.
+      if (this.viewHelper.handleClick(e)) return
       if (this.gizmoDragging || this.vertexEditor.isDragging()) return
       const moved = Math.hypot(e.clientX - this.pointerDown.x, e.clientY - this.pointerDown.y)
       if (moved > 5) return // it was an orbit drag
@@ -281,16 +306,24 @@ export class Engine {
   private start(): void {
     const loop = () => {
       this.raf = requestAnimationFrame(loop)
+      const delta = this.clock.getDelta()
+      if (this.viewHelper.animating) this.viewHelper.update(delta)
       this.viewport.update()
       this.selection.update()
       this.lightHelpers.update()
       this.renderer.render(this.scene, this.viewport.camera)
+      // ViewHelper renders into a corner; without this its internal render() would
+      // autoClear the whole color buffer and wipe the main scene.
+      this.renderer.autoClear = false
+      this.viewHelper.render(this.renderer)
+      this.renderer.autoClear = true
     }
     loop()
   }
 
   dispose(): void {
     cancelAnimationFrame(this.raf)
+    this.viewHelper.dispose()
     this.lightHelpers.detach()
     this.wireMaterial.dispose()
     this.gizmo.dispose()

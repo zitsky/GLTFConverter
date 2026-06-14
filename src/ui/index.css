@@ -257,82 +257,73 @@ input[type='checkbox'] {
 .viewport-overlay > * {
   pointer-events: auto;
 }
-.view-cube {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.cube-face {
-  fill: #2b3852;
-  stroke: #0c0e14;
-  stroke-width: 1;
-  cursor: pointer;
-  transition: fill 0.12s;
-}
-.cube-face.left {
-  fill: #223049;
-}
-.cube-face.right {
-  fill: #1a2740;
-}
-.cube-face:hover {
-  fill: var(--accent);
-}
-.cube-label {
-  fill: #cdd8ec;
-  font-size: 8px;
-  text-anchor: middle;
-  pointer-events: none;
-}
-.view-buttons {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  width: 132px;
-}
-.view-buttons .mini {
-  background: rgba(20, 24, 35, 0.85);
-  padding: 3px 0;
-  font-size: 11px;
-}
 .viewport-settings {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
+  bottom: 12px;
+  left: 12px;
 }
 .settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   width: auto;
-  padding: 4px 8px;
-  background: rgba(20, 24, 35, 0.85);
+  padding: 5px 10px;
+  background: rgba(20, 24, 35, 0.9);
   border: 1px solid var(--border);
   border-radius: 6px;
 }
 .settings-pop {
   position: absolute;
-  bottom: 36px;
-  right: 0;
-  width: 200px;
+  bottom: 38px;
+  left: 0;
+  width: 220px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px;
+  padding: 6px 10px 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.set-group {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.set-group:last-child {
+  border-bottom: none;
+}
+.set-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
 }
 .set-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 2px;
+  padding: 3px 0;
 }
 .set-row input[type='range'] {
   flex: 1;
 }
 .set-row input[type='checkbox'] {
   width: auto;
+}
+.segmented {
+  display: flex;
+  gap: 0;
+}
+.segmented button {
+  flex: 1;
+  border-radius: 0;
+  border-right-width: 0;
+}
+.segmented button:first-child {
+  border-radius: 5px 0 0 5px;
+}
+.segmented button:last-child {
+  border-radius: 0 5px 5px 0;
+  border-right-width: 1px;
 }
 
 /* UV editor */
