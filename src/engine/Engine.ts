@@ -37,7 +37,11 @@ export class Engine {
   private raf = 0
 
   constructor(container: HTMLElement, project: Project) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      preserveDrawingBuffer: true,
+    })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(container.clientWidth || 1, container.clientHeight || 1)
     container.appendChild(this.renderer.domElement)
@@ -110,6 +114,20 @@ export class Engine {
   /** Content-only scene root, used by the exporter. */
   getExportRoot(): THREE.Object3D {
     return this.contentRoot
+  }
+
+  /** Renders once and returns a downscaled JPEG data URL for project previews. */
+  captureThumbnail(size = 320): string {
+    this.renderer.render(this.scene, this.viewport.camera)
+    const src = this.renderer.domElement
+    const aspect = (src.width || 16) / (src.height || 9)
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = Math.max(1, Math.round(size / aspect))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return ''
+    ctx.drawImage(src, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.72)
   }
 
   /** Drop cached geometries so the next sync rebuilds them from the assets. */

@@ -1,38 +1,57 @@
 import { useEffect } from 'react'
 import { ProjectRepository } from '../infrastructure/persistence/ProjectRepository.ts'
+import { useAppStore } from '../state/useAppStore.ts'
 import { useEditorStore } from '../state/useEditorStore.ts'
 import { useEngineStore } from '../state/useEngineStore.ts'
 import { useProjectStore } from '../state/useProjectStore.ts'
+import { Dashboard } from './dashboard/Dashboard.tsx'
 import { EditorLayout } from './layout/EditorLayout.tsx'
+import { saveCurrentProject } from './saveProject.ts'
+
+const isEmptyProject = () =>
+  Object.keys(useProjectStore.getState().project.scene.nodes).length === 0
 
 export function App() {
+  const view = useAppStore((s) => s.view)
   const project = useProjectStore((s) => s.project)
 
-  // Debounced autosave to IndexedDB whenever the project changes.
+  // Debounced autosave — only in the editor and only once the scene has content,
+  // so we never persist throwaway empty projects.
   useEffect(() => {
-    const handle = setTimeout(() => void ProjectRepository.save(project), 1500)
+    if (view !== 'editor' || isEmptyProject()) return
+    const handle = setTimeout(() => void saveCurrentProject(), 1500)
     return () => clearTimeout(handle)
-  }, [project])
+  }, [project, view])
+
+  // Before unload: drop empty projects, warn about unsaved changes.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      const state = useProjectStore.getState()
+      if (Object.keys(state.project.scene.nodes).length === 0) {
+        void ProjectRepository.remove(state.project.meta.id)
+        return
+      }
+      if (state.dirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       const typing = target.tagName === 'INPUT' || target.tagName === 'SELECT'
-
       const projectStore = useProjectStore.getState()
       const editor = useEditorStore.getState()
       const key = e.key.toLowerCase()
 
       if ((e.ctrlKey || e.metaKey) && key === 's') {
         e.preventDefault()
-        void ProjectRepository.save(useProjectStore.getState().project)
+        void saveCurrentProject()
         editor.setStatus('Проект сохранён')
-        return
-      }
-      if ((e.ctrlKey || e.metaKey) && key === 'n') {
-        e.preventDefault()
-        editor.select(null)
-        projectStore.newProject()
         return
       }
       if ((e.ctrlKey || e.metaKey) && key === 'z') {
@@ -50,6 +69,7 @@ export function App() {
       }
 
       if (typing) return
+      if (useAppStore.getState().view !== 'editor') return
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && editor.selectedId) {
         projectStore.removeNode(editor.selectedId)
@@ -64,5 +84,5 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  return <EditorLayout />
+  return view === 'dashboard' ? <Dashboard /> : <EditorLayout />
 }

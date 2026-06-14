@@ -17,18 +17,18 @@ export function Inspector() {
 
   if (!node) {
     return (
-      <div className="panel inspector">
+      <>
         <div className="section">
           <h3>Окружение</h3>
           <ColorField label="Фон" value={background} onChange={setBackground} />
         </div>
         <p className="hint">Выберите узел в дереве сцены или во вьюпорте.</p>
-      </div>
+      </>
     )
   }
 
   return (
-    <div className="panel inspector">
+    <>
       <div className="section">
         <h3>{node.name}</h3>
         <div className="hint">{node.kind}</div>
@@ -41,6 +41,6 @@ export function Inspector() {
         </>
       )}
       {isLightNode(node) && <LightPanel node={node} />}
-    </div>
+    </>
   )
 }

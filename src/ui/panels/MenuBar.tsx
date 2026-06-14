@@ -12,12 +12,22 @@ import type { LightType } from '../../domain/nodes/lights.ts'
 import type { SceneFragment } from '../../domain/project/SceneFragment.ts'
 import { ProjectRepository } from '../../infrastructure/persistence/ProjectRepository.ts'
 import type { ProjectSummary } from '../../infrastructure/persistence/ProjectRepository.ts'
+import { useAppStore } from '../../state/useAppStore.ts'
 import { useEditorStore } from '../../state/useEditorStore.ts'
 import { useEngineStore } from '../../state/useEngineStore.ts'
+import { useLayoutStore } from '../../state/useLayoutStore.ts'
+import type { PanelId } from '../../state/useLayoutStore.ts'
 import { useProjectStore } from '../../state/useProjectStore.ts'
+import { Logo } from '../icons/Logo.tsx'
+import { saveCurrentProject } from '../saveProject.ts'
 
 const PRIMITIVES: PrimitiveKind[] = ['box', 'sphere', 'cylinder', 'plane', 'torus']
 const LIGHTS: LightType[] = ['directional', 'point', 'spot', 'ambient', 'hemisphere']
+const PANELS: { id: PanelId; label: string }[] = [
+  { id: 'scene', label: 'Сцена' },
+  { id: 'inspector', label: 'Инспектор' },
+  { id: 'assets', label: 'Материалы и текстуры' },
+]
 
 export function MenuBar() {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
@@ -33,6 +43,10 @@ export function MenuBar() {
   const redo = useProjectStore((s) => s.redo)
   const canUndo = useProjectStore((s) => s.past.length > 0)
   const canRedo = useProjectStore((s) => s.future.length > 0)
+
+  const setView = useAppStore((s) => s.setView)
+  const hidden = useLayoutStore((s) => s.hidden)
+  const toggleHidden = useLayoutStore((s) => s.toggleHidden)
 
   const selectedId = useEditorStore((s) => s.selectedId)
   const select = useEditorStore((s) => s.select)
@@ -95,7 +109,7 @@ export function MenuBar() {
   }
 
   const saveProject = async () => {
-    await ProjectRepository.save(project)
+    await saveCurrentProject()
     await refreshProjects()
     setStatus('Проект сохранён')
   }
@@ -131,6 +145,10 @@ export function MenuBar() {
 
       {openMenu && <div className="menu-backdrop" onClick={close} />}
 
+      <button className="logo" title="Все проекты" onClick={() => setView('dashboard')}>
+        <Logo size={20} />
+      </button>
+
       <Menu
         name="file"
         label="Файл"
@@ -140,6 +158,8 @@ export function MenuBar() {
         onClose={close}
         onOpen={() => void refreshProjects()}
       >
+        <Item label="Все проекты…" onClick={() => setView('dashboard')} />
+        <Separator />
         <Item label="Новый" shortcut="Ctrl+N" onClick={() => { select(null); newProject() }} />
         <SubMenu label="Открыть">
           {projects.length === 0 && <Item label="(пусто)" disabled onClick={() => {}} />}
@@ -220,6 +240,14 @@ export function MenuBar() {
           shortcut="F"
           onClick={() => useEngineStore.getState().engine?.focusSelected()}
         />
+        <Separator />
+        {PANELS.map((p) => (
+          <Item
+            key={p.id}
+            label={`${hidden[p.id] ? '☐' : '☑'}  ${p.label}`}
+            onClick={() => toggleHidden(p.id)}
+          />
+        ))}
       </Menu>
 
       <span className="spacer" />

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type { GeometryAsset } from '../domain/assets/GeometryAsset.ts'
 import type { MaterialAsset, TextureSlot } from '../domain/assets/MaterialAsset.ts'
+import { TEXTURE_SLOTS } from '../domain/assets/MaterialAsset.ts'
 import type { TextureAsset } from '../domain/assets/TextureAsset.ts'
 import type { RGB } from '../domain/math/types.ts'
 import type { LightData } from '../domain/nodes/lights.ts'
@@ -20,11 +21,14 @@ interface ProjectState {
   project: Project
   past: Project[]
   future: Project[]
+  /** True when the project changed since the last save. */
+  dirty: boolean
 
   // lifecycle
   setProject: (project: Project) => void
   newProject: (name?: string) => void
   setProjectName: (name: string) => void
+  markSaved: () => void
 
   // import
   mergeFragment: (fragment: SceneFragment) => void
@@ -41,9 +45,12 @@ interface ProjectState {
   // assets
   addMaterial: (material: MaterialAsset) => void
   updateMaterial: (id: AssetId, patch: Partial<MaterialAsset>) => void
+  removeMaterial: (id: AssetId) => void
   addMaterialSlot: (meshId: NodeId, materialId: AssetId) => void
   assignMaterialSlot: (meshId: NodeId, slot: number, materialId: AssetId) => void
   addTexture: (texture: TextureAsset) => void
+  updateTexture: (id: AssetId, patch: Partial<TextureAsset>) => void
+  removeTexture: (id: AssetId) => void
   setMaterialTexture: (
     materialId: AssetId,
     slot: TextureSlot,
@@ -78,6 +85,7 @@ export const useProjectStore = create<ProjectState>()(
         }
         recipe(s.project as Project)
         s.project.meta.updatedAt = Date.now()
+        s.dirty = true
       })
     }
 
@@ -85,12 +93,14 @@ export const useProjectStore = create<ProjectState>()(
       project: createEmptyProject(),
       past: [],
       future: [],
+      dirty: false,
 
       setProject: (project) =>
         set((s) => {
           s.project = project
           s.past = []
           s.future = []
+          s.dirty = false
         }),
 
       newProject: (name) =>
@@ -98,7 +108,10 @@ export const useProjectStore = create<ProjectState>()(
           s.project = createEmptyProject(name)
           s.past = []
           s.future = []
+          s.dirty = false
         }),
+
+      markSaved: () => set((s) => void (s.dirty = false)),
 
       setProjectName: (name) =>
         edit((p) => {
@@ -162,6 +175,16 @@ export const useProjectStore = create<ProjectState>()(
           if (m) Object.assign(m, patch)
         }),
 
+      removeMaterial: (id) =>
+        edit((p) => {
+          delete p.assets.materials[id]
+          for (const node of Object.values(p.scene.nodes)) {
+            if (node.kind === 'mesh') {
+              node.materialIds = node.materialIds.filter((mid) => mid !== id)
+            }
+          }
+        }),
+
       addMaterialSlot: (meshId, materialId) =>
         edit((p) => {
           const n = p.scene.nodes[meshId]
@@ -178,6 +201,22 @@ export const useProjectStore = create<ProjectState>()(
       addTexture: (texture) =>
         edit((p) => {
           p.assets.textures[texture.id] = texture
+        }),
+
+      updateTexture: (id, patch) =>
+        edit((p) => {
+          const t = p.assets.textures[id]
+          if (t) Object.assign(t, patch)
+        }),
+
+      removeTexture: (id) =>
+        edit((p) => {
+          delete p.assets.textures[id]
+          for (const m of Object.values(p.assets.materials)) {
+            for (const slot of TEXTURE_SLOTS) {
+              if (m[slot] === id) m[slot] = undefined
+            }
+          }
         }),
 
       setMaterialTexture: (materialId, slot, textureId) =>

@@ -1,17 +1,29 @@
+import { useLayoutStore } from '../../state/useLayoutStore.ts'
 import { MenuBar } from '../panels/MenuBar.tsx'
 import { Toolbar } from '../panels/Toolbar.tsx'
-import { SceneTree } from '../panels/SceneTree.tsx'
-import { Inspector } from '../panels/Inspector/Inspector.tsx'
 import { ViewportCanvas } from '../viewport/ViewportCanvas.tsx'
+import { PanelHost } from './PanelHost.tsx'
 
 export function EditorLayout() {
+  const order = useLayoutStore((s) => s.order)
+  const hidden = useLayoutStore((s) => s.hidden)
+  const leftVisible = order.left.some((id) => !hidden[id])
+  const rightVisible = order.right.some((id) => !hidden[id])
+
   return (
-    <div className="editor">
+    <div
+      className="editor"
+      style={{
+        gridTemplateColumns: `${leftVisible ? '264px' : '0'} 1fr ${
+          rightVisible ? '312px' : '0'
+        }`,
+      }}
+    >
       <MenuBar />
       <Toolbar />
-      <SceneTree />
+      <PanelHost side="left" />
       <ViewportCanvas />
-      <Inspector />
+      <PanelHost side="right" />
     </div>
   )
 }

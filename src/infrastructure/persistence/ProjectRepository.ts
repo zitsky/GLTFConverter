@@ -10,6 +10,7 @@ interface StoredProject {
   id: string
   name: string
   updatedAt: number
+  thumbnail?: string
   project: Project
 }
 
@@ -25,6 +26,7 @@ export interface ProjectSummary {
   id: string
   name: string
   updatedAt: number
+  thumbnail?: string
 }
 
 let dbPromise: Promise<IDBPDatabase<EditorDB>> | null = null
@@ -43,12 +45,13 @@ const getDb = (): Promise<IDBPDatabase<EditorDB>> => {
 
 /** CRUD for projects in IndexedDB. Projects are JSON-safe (textures as data URLs). */
 export const ProjectRepository = {
-  async save(project: Project): Promise<void> {
+  async save(project: Project, thumbnail?: string): Promise<void> {
     const db = await getDb()
     await db.put(STORE, {
       id: project.meta.id,
       name: project.meta.name,
       updatedAt: project.meta.updatedAt,
+      thumbnail,
       project,
     })
   },
@@ -63,7 +66,7 @@ export const ProjectRepository = {
     const db = await getDb()
     const all = await db.getAll(STORE)
     return all
-      .map(({ id, name, updatedAt }) => ({ id, name, updatedAt }))
+      .map(({ id, name, updatedAt, thumbnail }) => ({ id, name, updatedAt, thumbnail }))
       .sort((a, b) => b.updatedAt - a.updatedAt)
   },
 

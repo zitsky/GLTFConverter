@@ -111,27 +111,20 @@ export function SceneTree() {
     )
   }
 
-  return (
-    <div className="panel tree">
-      <div className="section">
-        <h3>Сцена</h3>
-        {rootIds.length === 0 ? (
-          <p className="hint">
-            Пусто. Импортируйте модель (Файл → Импорт) или добавьте примитив
-            (Добавить → Примитив).
-          </p>
-        ) : (
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              const dragged = e.dataTransfer.getData('text/node') as NodeId
-              if (dragged) reparent(dragged, null)
-            }}
-          >
-            {rootIds.map((id) => renderNode(id, 0))}
-          </div>
-        )}
-      </div>
+  return rootIds.length === 0 ? (
+    <p className="hint">
+      Пусто. Импортируйте модель (Файл → Импорт) или добавьте примитив (Добавить →
+      Примитив).
+    </p>
+  ) : (
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        const dragged = e.dataTransfer.getData('text/node') as NodeId
+        if (dragged) reparent(dragged, null)
+      }}
+    >
+      {rootIds.map((id) => renderNode(id, 0))}
     </div>
   )
 }
