@@ -93,6 +93,10 @@ export const createLightFragment = (type: LightType): SceneFragment => {
   const node = createLightNode(defaultLight(type), LIGHT_LABEL[type])
   if (type !== 'ambient' && type !== 'hemisphere') {
     node.transform.position = { x: 3, y: 5, z: 4 }
+    // Aim local -Z at the origin so the light points at the scene by default.
+    const dir = new THREE.Vector3(-3, -5, -4).normalize()
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir)
+    node.transform.rotation = { x: q.x, y: q.y, z: q.z, w: q.w }
   }
   fragment.nodes[node.id] = node
   fragment.rootIds.push(node.id)

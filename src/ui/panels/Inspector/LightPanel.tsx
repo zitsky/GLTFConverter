@@ -20,6 +20,8 @@ export function LightPanel({ node }: { node: LightNode }) {
   const set = (patch: Partial<typeof light>) => updateLight(node.id, patch)
 
   const hasRadius = light.type === 'point' || light.type === 'spot' || light.type === 'rect'
+  const directional =
+    light.type === 'directional' || light.type === 'spot' || light.type === 'rect'
 
   // Spot cone: outer = angle, inner derived from penumbra.
   const outerDeg = (light.angle ?? Math.PI / 6) * RAD2DEG
@@ -127,11 +129,23 @@ export function LightPanel({ node }: { node: LightNode }) {
       {(light.type === 'directional' ||
         light.type === 'spot' ||
         light.type === 'point') && (
-        <CheckField
-          label="Тени"
-          value={light.castShadow ?? false}
-          onChange={(castShadow) => set({ castShadow })}
-        />
+        <>
+          <div className="set-label" style={{ marginTop: 8 }}>
+            Тени
+          </div>
+          <CheckField
+            label="Отбрасывать"
+            value={light.castShadow ?? false}
+            onChange={(castShadow) => set({ castShadow })}
+          />
+        </>
+      )}
+
+      {directional && (
+        <p className="hint" style={{ marginTop: 8 }}>
+          Направление: режим «Поворот» (E) — тяните гизмо во вьюпорте, чтобы
+          нацелить источник. Источники всегда видны значком ☀.
+        </p>
       )}
     </div>
   )

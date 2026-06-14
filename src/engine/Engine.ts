@@ -12,7 +12,7 @@ import { TransformGizmo } from './gizmos/TransformGizmo.ts'
 import type { TransformMode } from './gizmos/TransformGizmo.ts'
 import { VertexEditor } from './subobject/VertexEditor.ts'
 import type { SubObjectMode } from './subobject/SubObjectMode.ts'
-import { LightHelperManager } from './helpers/LightHelpers.ts'
+import { LightGizmos } from './helpers/LightGizmos.ts'
 
 export interface EngineCallbacks {
   onSelect?: (nodeId: NodeId | null) => void
@@ -52,7 +52,7 @@ export class Engine {
   private gizmo: TransformGizmo
   private picking: PickingService
   private vertexEditor: VertexEditor
-  private lightHelpers: LightHelperManager
+  private lightGizmos: LightGizmos
   private viewHelper: ViewHelper
   private clock = new THREE.Clock()
   private callbacks: EngineCallbacks = {}
@@ -101,7 +101,7 @@ export class Engine {
     this.picking = new PickingService(this.renderer.domElement, this.viewport.camera)
     this.gizmo = new TransformGizmo(this.viewport.camera, this.renderer.domElement, this.scene)
     this.vertexEditor = new VertexEditor(this.viewport.camera, this.renderer.domElement)
-    this.lightHelpers = new LightHelperManager(this.scene)
+    this.lightGizmos = new LightGizmos(this.scene)
 
     // Blender-style navigation gizmo: rotates with the camera, click to snap.
     this.viewHelper = new ViewHelper(this.viewport.camera, this.renderer.domElement)
@@ -114,6 +114,7 @@ export class Engine {
     this.wirePointer()
 
     this.sync.sync(project)
+    this.refreshLightGizmos(project)
     if (project.camera) this.setCameraState(project.camera)
     this.viewport.resize()
     this.start()
@@ -127,9 +128,20 @@ export class Engine {
   syncProject(project: Project): void {
     this.applyEnvironment(project)
     this.sync.sync(project)
+    this.refreshLightGizmos(project)
     // Re-bind selection because objects may have been recreated.
     this.refreshSelection()
     if (this.subObjectMode !== 'object') this.refreshVertexEditor()
+  }
+
+  private refreshLightGizmos(project: Project): void {
+    const lights: THREE.Light[] = []
+    for (const node of Object.values(project.scene.nodes)) {
+      if (node.kind !== 'light') continue
+      const obj = this.sync.object3dFor(node.id)
+      if (obj instanceof THREE.Light) lights.push(obj)
+    }
+    this.lightGizmos.sync(lights)
   }
 
   setSelection(id: NodeId | null): void {
@@ -211,7 +223,7 @@ export class Engine {
     this.selection.select(obj ?? null)
     if (obj) this.gizmo.attach(obj)
     else this.gizmo.detach()
-    this.lightHelpers.attach(obj instanceof THREE.Light ? obj : null)
+    this.lightGizmos.setSelected(obj instanceof THREE.Light ? obj : null)
   }
 
   private refreshVertexEditor(): void {
@@ -331,7 +343,7 @@ export class Engine {
       if (this.viewHelper.animating) this.viewHelper.update(delta)
       this.viewport.update()
       this.selection.update()
-      this.lightHelpers.update()
+      this.lightGizmos.update()
       this.renderer.render(this.scene, this.viewport.camera)
       // ViewHelper renders into a corner; without this its internal render() would
       // autoClear the whole color buffer and wipe the main scene.
@@ -345,7 +357,7 @@ export class Engine {
   dispose(): void {
     cancelAnimationFrame(this.raf)
     this.viewHelper.dispose()
-    this.lightHelpers.detach()
+    this.lightGizmos.dispose()
     this.wireMaterial.dispose()
     this.gizmo.dispose()
     this.vertexEditor.dispose()

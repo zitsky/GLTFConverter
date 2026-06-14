@@ -201,13 +201,25 @@ const createLight = (data: LightData): THREE.Light => {
     case 'point':
       return new THREE.PointLight(0xffffff, data.intensity)
     case 'spot':
-      return new THREE.SpotLight(0xffffff, data.intensity)
+      return aimable(new THREE.SpotLight(0xffffff, data.intensity))
     case 'rect':
       return new THREE.RectAreaLight(0xffffff, data.intensity, data.width ?? 4, data.height ?? 4)
     case 'directional':
     default:
-      return new THREE.DirectionalLight(0xffffff, data.intensity)
+      return aimable(new THREE.DirectionalLight(0xffffff, data.intensity))
   }
+}
+
+/**
+ * Parents the light's target one unit along local -Z, so rotating the light
+ * node (rotate gizmo) aims directional/spot lights.
+ */
+const aimable = <T extends THREE.DirectionalLight | THREE.SpotLight>(light: T): T => {
+  const target = new THREE.Object3D()
+  target.position.set(0, 0, -1)
+  light.add(target)
+  light.target = target
+  return light
 }
 
 const disposeMaterial = (m: THREE.Material | THREE.Material[] | undefined): void => {
