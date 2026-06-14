@@ -2,10 +2,13 @@ import { ProjectRepository } from '../infrastructure/persistence/ProjectReposito
 import { useEngineStore } from '../state/useEngineStore.ts'
 import { useProjectStore } from '../state/useProjectStore.ts'
 
-/** Saves the current project to IndexedDB with a fresh scene thumbnail. */
+/** Saves the current project to IndexedDB with a fresh scene thumbnail + camera. */
 export const saveCurrentProject = async (): Promise<void> => {
   const { project, markSaved } = useProjectStore.getState()
-  const thumb = useEngineStore.getState().engine?.captureThumbnail()
-  await ProjectRepository.save(project, thumb)
+  const engine = useEngineStore.getState().engine
+  const thumb = engine?.captureThumbnail()
+  // Snapshot the live camera without polluting the undo history.
+  const toSave = engine ? { ...project, camera: engine.getCameraState() } : project
+  await ProjectRepository.save(toSave, thumb)
   markSaved()
 }

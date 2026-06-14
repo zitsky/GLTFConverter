@@ -1,5 +1,6 @@
 import type { MaterialAsset, TextureSlot } from '../../../domain/assets/MaterialAsset.ts'
 import { TEXTURE_SLOTS } from '../../../domain/assets/MaterialAsset.ts'
+import { MATERIAL_PRESETS } from '../../../domain/assets/materialPresets.ts'
 import { newAssetId } from '../../../domain/scene/ids.ts'
 import type { AssetId } from '../../../domain/scene/ids.ts'
 import { readFileAsDataUrl } from '../../../infrastructure/files/fileRead.ts'
@@ -34,6 +35,25 @@ export function MaterialCard({ material }: { material: MaterialAsset }) {
 
   return (
     <div className="material-card">
+      <div className="field">
+        <label>Пресет</label>
+        <select
+          value=""
+          title="Применить пресет материала"
+          onChange={(e) => {
+            const preset = MATERIAL_PRESETS.find((p) => p.id === e.target.value)
+            if (preset) update(material.id, preset.props)
+            e.target.value = ''
+          }}
+        >
+          <option value="">— выбрать —</option>
+          {MATERIAL_PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="field">
         <label>Имя</label>
         <input

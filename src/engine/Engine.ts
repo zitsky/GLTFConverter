@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { ViewHelper } from 'three/examples/jsm/helpers/ViewHelper.js'
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
-import type { Project } from '../domain/project/Project.ts'
+import type { CameraView, Project } from '../domain/project/Project.ts'
 import type { NodeId } from '../domain/scene/ids.ts'
 import type { Transform } from '../domain/scene/Transform.ts'
 import { SceneSynchronizer } from './SceneSynchronizer.ts'
@@ -114,6 +114,7 @@ export class Engine {
     this.wirePointer()
 
     this.sync.sync(project)
+    if (project.camera) this.setCameraState(project.camera)
     this.viewport.resize()
     this.start()
   }
@@ -151,6 +152,22 @@ export class Engine {
       this.gizmo.detach()
       this.refreshVertexEditor()
     }
+  }
+
+  /** Current camera framing, for persistence. */
+  getCameraState(): CameraView {
+    const p = this.viewport.camera.position
+    const t = this.viewport.controls.target
+    return {
+      position: { x: p.x, y: p.y, z: p.z },
+      target: { x: t.x, y: t.y, z: t.z },
+    }
+  }
+
+  setCameraState(view: CameraView): void {
+    this.viewport.camera.position.set(view.position.x, view.position.y, view.position.z)
+    this.viewport.controls.target.set(view.target.x, view.target.y, view.target.z)
+    this.viewport.controls.update()
   }
 
   focusSelected(): void {

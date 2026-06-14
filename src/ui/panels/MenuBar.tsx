@@ -122,6 +122,11 @@ export function MenuBar() {
     if (loaded) {
       select(null)
       setProject(loaded)
+      if (loaded.camera) {
+        requestAnimationFrame(() =>
+          useEngineStore.getState().engine?.setCameraState(loaded.camera!),
+        )
+      }
       setStatus(`Открыт «${loaded.meta.name}»`)
     }
   }

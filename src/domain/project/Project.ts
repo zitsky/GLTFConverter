@@ -1,4 +1,4 @@
-import type { RGB } from '../math/types.ts'
+import type { RGB, Vec3 } from '../math/types.ts'
 import { rgb } from '../math/types.ts'
 import type { AssetRegistry } from '../assets/AssetRegistry.ts'
 import { emptyAssetRegistry } from '../assets/AssetRegistry.ts'
@@ -21,12 +21,19 @@ export interface EnvironmentSettings {
   background: RGB
 }
 
+/** Persisted camera framing, restored when a project is opened. */
+export interface CameraView {
+  position: Vec3
+  target: Vec3
+}
+
 /** Aggregate root: everything needed to render, persist and export a scene. */
 export interface Project {
   meta: ProjectMeta
   scene: SceneGraph
   assets: AssetRegistry
   environment: EnvironmentSettings
+  camera?: CameraView
 }
 
 export const createEmptyProject = (name = 'Untitled'): Project => {
