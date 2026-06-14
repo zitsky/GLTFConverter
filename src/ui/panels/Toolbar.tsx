@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { importAccept, importFile } from '../../application/import/ImportService.ts'
+import { exportScene } from '../../application/export/ExportService.ts'
+import type { ExportFormat } from '../../application/export/ExportService.ts'
 import { isMeshNode } from '../../domain/nodes/SceneNode.ts'
 import type { TransformMode } from '../../engine/gizmos/TransformGizmo.ts'
 import { SUB_OBJECT_MODES } from '../../engine/subobject/SubObjectMode.ts'
 import type { SubObjectMode } from '../../engine/subobject/SubObjectMode.ts'
 import { useEditorStore } from '../../state/useEditorStore.ts'
+import { useEngineStore } from '../../state/useEngineStore.ts'
 import { useProjectStore } from '../../state/useProjectStore.ts'
 import { Icon } from '../icons/Icon.tsx'
 import type { IconName } from '../icons/Icon.tsx'
@@ -34,8 +38,75 @@ export function Toolbar() {
   const isMesh = node ? isMeshNode(node) : false
   const [uvOpen, setUvOpen] = useState(false)
 
+  const mergeFragment = useProjectStore((s) => s.mergeFragment)
+  const select = useEditorStore((s) => s.select)
+  const setStatus = useEditorStore((s) => s.setStatus)
+  const setBusy = useEditorStore((s) => s.setBusy)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const onImport = async (files: FileList | null) => {
+    if (!files?.length) return
+    setBusy(true)
+    try {
+      for (const file of Array.from(files)) {
+        setStatus(`Импорт «${file.name}»…`)
+        const fragment = await importFile(file)
+        mergeFragment(fragment)
+        const root = fragment.rootIds[0]
+        if (root) {
+          select(root)
+          requestAnimationFrame(() => useEngineStore.getState().engine?.focusSelected())
+        }
+      }
+      setStatus('Импорт завершён')
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Ошибка импорта')
+    } finally {
+      setBusy(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const onExport = async (format: ExportFormat) => {
+    const engine = useEngineStore.getState().engine
+    if (!engine) return
+    setBusy(true)
+    setStatus('Экспорт…')
+    try {
+      const project = useProjectStore.getState().project
+      const res = await exportScene(engine.getExportRoot(), project.meta.name, format)
+      setStatus(`Сохранено: ${res.filename} (${res.kind})`)
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Ошибка экспорта')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="toolbar">
+      <input
+        ref={fileRef}
+        type="file"
+        accept={importAccept}
+        multiple
+        hidden
+        onChange={(e) => void onImport(e.target.files)}
+      />
+      <div className="group">
+        <button className="uv-launch" title="Импорт модели" onClick={() => fileRef.current?.click()}>
+          <Icon name="open" size={16} />
+          Импорт
+        </button>
+        <button className="icon-btn" title="Экспорт GLB" onClick={() => void onExport('glb')}>
+          <Icon name="export" size={16} />
+        </button>
+        <button className="uv-launch" title="Экспорт GLTF / ZIP" onClick={() => void onExport('gltf')}>
+          <Icon name="export" size={16} />
+          GLTF
+        </button>
+      </div>
+
       <div className="group">
         {TRANSFORM_MODES.map(({ mode, icon, label }) => (
           <button

@@ -756,6 +756,11 @@ button.mini {
   flex-direction: column;
   gap: 6px;
 }
+.uv-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 .mesh-preview {
   flex: 1;
   min-height: 0;
