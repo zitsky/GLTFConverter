@@ -1,9 +1,13 @@
+import { useState } from 'react'
+import { isMeshNode } from '../../domain/nodes/SceneNode.ts'
 import type { TransformMode } from '../../engine/gizmos/TransformGizmo.ts'
 import { SUB_OBJECT_MODES } from '../../engine/subobject/SubObjectMode.ts'
 import type { SubObjectMode } from '../../engine/subobject/SubObjectMode.ts'
 import { useEditorStore } from '../../state/useEditorStore.ts'
+import { useProjectStore } from '../../state/useProjectStore.ts'
 import { Icon } from '../icons/Icon.tsx'
 import type { IconName } from '../icons/Icon.tsx'
+import { UVEditorModal } from './UVEditorModal.tsx'
 
 const TRANSFORM_MODES: { mode: TransformMode; icon: IconName; label: string }[] = [
   { mode: 'translate', icon: 'move', label: 'Перемещение (W)' },
@@ -24,6 +28,11 @@ export function Toolbar() {
   const setTransformMode = useEditorStore((s) => s.setTransformMode)
   const subObjectMode = useEditorStore((s) => s.subObjectMode)
   const setSubObjectMode = useEditorStore((s) => s.setSubObjectMode)
+
+  const selectedId = useEditorStore((s) => s.selectedId)
+  const node = useProjectStore((s) => (selectedId ? s.project.scene.nodes[selectedId] : undefined))
+  const isMesh = node ? isMeshNode(node) : false
+  const [uvOpen, setUvOpen] = useState(false)
 
   return (
     <div className="toolbar">
@@ -52,6 +61,20 @@ export function Toolbar() {
           </button>
         ))}
       </div>
+
+      <div className="group">
+        <button
+          className="uv-launch"
+          disabled={!isMesh}
+          title={isMesh ? 'Открыть редактор UV-развёртки' : 'Выберите меш'}
+          onClick={() => setUvOpen(true)}
+        >
+          <Icon name="image" size={16} />
+          UV-развёртка
+        </button>
+      </div>
+
+      {uvOpen && <UVEditorModal onClose={() => setUvOpen(false)} />}
     </div>
   )
 }

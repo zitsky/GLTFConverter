@@ -28,7 +28,6 @@ const PANELS: { id: PanelId; label: string }[] = [
   { id: 'scene', label: 'Сцена' },
   { id: 'inspector', label: 'Инспектор' },
   { id: 'assets', label: 'Материалы и текстуры' },
-  { id: 'uv', label: 'UV-развёртка' },
 ]
 
 export function MenuBar() {

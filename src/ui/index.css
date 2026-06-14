@@ -68,6 +68,11 @@ button.danger {
 .icon-btn.active {
   color: #fff;
 }
+.uv-launch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 button:disabled {
   opacity: 0.4;
   cursor: default;
