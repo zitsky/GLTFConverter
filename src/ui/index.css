@@ -685,6 +685,25 @@ button.mini {
 .new-card:hover {
   color: var(--text);
 }
+.dashboard-footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.dashboard-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.dashboard-footer a:hover {
+  text-decoration: underline;
+}
 .menubar .logo {
   display: flex;
   align-items: center;

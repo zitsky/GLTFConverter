@@ -136,6 +136,22 @@ export function Dashboard() {
           </div>
         ))}
       </div>
+
+      <footer className="dashboard-footer">
+        <a
+          href="https://github.com/DagazProject/GLTFConverter"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          GitHub: DagazProject/GLTFConverter
+        </a>
+        <span>
+          Сделано с ❤️{' '}
+          <a href="https://zitsky.com" target="_blank" rel="noreferrer noopener">
+            zitsky.com
+          </a>
+        </span>
+      </footer>
     </div>
   )
 }
