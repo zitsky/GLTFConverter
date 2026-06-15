@@ -16,12 +16,13 @@ const buildPrimitiveGeometry = (kind: PrimitiveKind): THREE.BufferGeometry => {
     case 'cylinder':
       return new THREE.CylinderGeometry(0.6, 0.6, 1.4, 48)
     case 'plane':
-      return new THREE.PlaneGeometry(2, 2, 1, 1)
+      // Subdivided so it can be edited/sculpted before painting.
+      return new THREE.PlaneGeometry(2, 2, 24, 24)
     case 'torus':
       return new THREE.TorusGeometry(0.7, 0.28, 24, 64)
     case 'box':
     default:
-      return new THREE.BoxGeometry(1, 1, 1)
+      return new THREE.BoxGeometry(1, 1, 1, 3, 3, 3)
   }
 }
 
