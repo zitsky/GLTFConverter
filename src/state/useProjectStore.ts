@@ -62,6 +62,7 @@ interface ProjectState {
     arrays: { position: number[]; normal?: number[] },
   ) => void
   setGeometryUV: (geometryId: AssetId, uv: number[]) => void
+  setGeometryColor: (geometryId: AssetId, color: number[]) => void
 
   // environment
   setBackground: (color: RGB) => void
@@ -249,6 +250,12 @@ export const useProjectStore = create<ProjectState>()(
         edit((p) => {
           const g = p.assets.geometries[geometryId]
           if (g) g.attributes.uv = { array: uv, itemSize: 2, normalized: false }
+        }),
+
+      setGeometryColor: (geometryId, color) =>
+        edit((p) => {
+          const g = p.assets.geometries[geometryId]
+          if (g) g.attributes.color = { array: color, itemSize: 3, normalized: false }
         }),
 
       setBackground: (color) =>

@@ -21,6 +21,8 @@ export interface MaterialAsset {
   side: MaterialSide
   wireframe: boolean
   flatShading: boolean
+  /** Use per-vertex colours (enabled by the paint brush). */
+  vertexColors?: boolean
   // texture slots
   map?: AssetId
   normalMap?: AssetId

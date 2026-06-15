@@ -12,6 +12,7 @@ import { useProjectStore } from '../../state/useProjectStore.ts'
 import { Icon } from '../icons/Icon.tsx'
 import type { IconName } from '../icons/Icon.tsx'
 import { UVEditorModal } from './UVEditorModal.tsx'
+import { hexStringToRgb, rgbToHexString } from './Inspector/widgets.tsx'
 
 const TRANSFORM_MODES: { mode: TransformMode; icon: IconName; label: string }[] = [
   { mode: 'translate', icon: 'move', label: 'Перемещение (W)' },
@@ -37,6 +38,8 @@ export function Toolbar() {
   const node = useProjectStore((s) => (selectedId ? s.project.scene.nodes[selectedId] : undefined))
   const isMesh = node ? isMeshNode(node) : false
   const [uvOpen, setUvOpen] = useState(false)
+  const paint = useEditorStore((s) => s.paint)
+  const setPaint = useEditorStore((s) => s.setPaint)
 
   const mergeFragment = useProjectStore((s) => s.mergeFragment)
   const select = useEditorStore((s) => s.select)
@@ -143,6 +146,45 @@ export function Toolbar() {
           <Icon name="image" size={16} />
           UV-развёртка
         </button>
+        <button
+          className={`icon-btn${paint.active ? ' active' : ''}`}
+          title="Кисть (рисование по вершинам)"
+          onClick={() => setPaint({ active: !paint.active })}
+        >
+          <Icon name="brush" size={16} />
+        </button>
+        {paint.active && (
+          <div className="paint-controls">
+            <input
+              type="color"
+              title="Цвет кисти"
+              value={rgbToHexString(paint.color)}
+              onChange={(e) => setPaint({ color: hexStringToRgb(e.target.value) })}
+            />
+            <label title="Радиус">
+              R
+              <input
+                type="range"
+                min={0.05}
+                max={3}
+                step={0.05}
+                value={paint.radius}
+                onChange={(e) => setPaint({ radius: parseFloat(e.target.value) })}
+              />
+            </label>
+            <label title="Сила">
+              S
+              <input
+                type="range"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={paint.strength}
+                onChange={(e) => setPaint({ strength: parseFloat(e.target.value) })}
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       {uvOpen && <UVEditorModal onClose={() => setUvOpen(false)} />}

@@ -14,12 +14,15 @@ import { VertexEditor } from './subobject/VertexEditor.ts'
 import type { SubObjectMode } from './subobject/SubObjectMode.ts'
 import { LightGizmos } from './helpers/LightGizmos.ts'
 import { LightControls } from './helpers/LightControls.ts'
+import { PaintController } from './paint/PaintController.ts'
+import type { PaintConfig } from './paint/PaintController.ts'
 
 export interface EngineCallbacks {
   onSelect?: (nodeId: NodeId | null) => void
   onTransformCommit?: (nodeId: NodeId, transform: Transform) => void
   onGeometryCommit?: (nodeId: NodeId) => void
   onLightIntensity?: (nodeId: NodeId, intensity: number) => void
+  onPaintCommit?: (nodeId: NodeId, color: number[]) => void
 }
 
 export type ViewDir = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'iso'
@@ -56,6 +59,7 @@ export class Engine {
   private vertexEditor: VertexEditor
   private lightGizmos: LightGizmos
   private lightControls: LightControls
+  private paint: PaintController
   private viewHelper: ViewHelper
   private clock = new THREE.Clock()
   private callbacks: EngineCallbacks = {}
@@ -131,6 +135,23 @@ export class Engine {
         const obj = this.sync.object3dFor(id)
         if (obj instanceof THREE.Light) this.callbacks.onLightIntensity?.(id, obj.intensity)
       },
+    }
+
+    this.paint = new PaintController(
+      this.scene,
+      this.viewport.camera,
+      this.renderer.domElement,
+      this.contentRoot,
+    )
+    this.paint.onDragChange = (d) => {
+      this.viewport.controls.enabled = !d
+    }
+    this.paint.onCommit = (mesh) => {
+      const id = this.sync.nodeIdOf(mesh)
+      const col = mesh.geometry.getAttribute('color')
+      if (id && col) {
+        this.callbacks.onPaintCommit?.(id, Array.from(col.array as ArrayLike<number>))
+      }
     }
 
     this.sync.sync(project)
@@ -313,6 +334,15 @@ export class Engine {
     this.viewport.camera.updateProjectionMatrix()
   }
 
+  /** Configure the vertex paint brush. */
+  setPaint(config: PaintConfig): void {
+    this.paint.config = { ...config }
+    this.paint.setActive(config.active)
+    // Paint and the transform gizmo shouldn't fight for the pointer/space.
+    if (config.active) this.gizmo.detach()
+    else this.refreshSelection()
+  }
+
   /** Grid snapping for the transform gizmo. */
   setSnap(enabled: boolean, size = this.settings.snapSize): void {
     this.settings.snap = enabled
@@ -351,6 +381,7 @@ export class Engine {
     dom.addEventListener('pointerup', (e) => {
       // Let the navigation gizmo consume clicks in its corner first.
       if (this.viewHelper.handleClick(e)) return
+      if (this.paint.isActive()) return // paint owns the pointer
       if (this.gizmoDragging || this.vertexEditor.isDragging() || this.lightControls.isDragging())
         return
       const moved = Math.hypot(e.clientX - this.pointerDown.x, e.clientY - this.pointerDown.y)
@@ -391,6 +422,7 @@ export class Engine {
     this.viewHelper.dispose()
     this.lightGizmos.dispose()
     this.lightControls.dispose()
+    this.paint.dispose()
     this.wireMaterial.dispose()
     this.gizmo.dispose()
     this.vertexEditor.dispose()

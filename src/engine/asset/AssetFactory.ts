@@ -89,6 +89,7 @@ export class AssetFactory {
       side: sideToThree(asset.side),
       wireframe: asset.wireframe,
       flatShading: asset.flatShading,
+      vertexColors: asset.vertexColors ?? false,
     }
     const mat =
       asset.type === 'basic'
@@ -98,6 +99,7 @@ export class AssetFactory {
             transparent: asset.transparent,
             side: params.side,
             wireframe: asset.wireframe,
+            vertexColors: asset.vertexColors ?? false,
           })
         : asset.type === 'physical'
           ? new THREE.MeshPhysicalMaterial(params)

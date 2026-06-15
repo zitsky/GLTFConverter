@@ -73,6 +73,26 @@ button.danger {
   align-items: center;
   gap: 6px;
 }
+.paint-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.paint-controls input[type='color'] {
+  width: 28px;
+  height: 26px;
+  padding: 0;
+}
+.paint-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.paint-controls input[type='range'] {
+  width: 70px;
+}
 button:disabled {
   opacity: 0.4;
   cursor: default;

@@ -23,6 +23,13 @@ export function ViewportCanvas() {
         useProjectStore.getState().setTransform(id, transform),
       onLightIntensity: (id, intensity) =>
         useProjectStore.getState().updateLight(id, { intensity }),
+      onPaintCommit: (id, color) => {
+        const node = useProjectStore.getState().project.scene.nodes[id]
+        if (!node || !isMeshNode(node)) return
+        useProjectStore.getState().setGeometryColor(node.geometryId, color)
+        const matId = node.materialIds[0]
+        if (matId) useProjectStore.getState().updateMaterial(matId, { vertexColors: true })
+      },
       onGeometryCommit: (id) => {
         const geo = instance.getMeshGeometry(id)
         const node = useProjectStore.getState().project.scene.nodes[id]
@@ -42,6 +49,7 @@ export function ViewportCanvas() {
     instance.setTransformMode(ed.transformMode)
     instance.setSubObjectMode(ed.subObjectMode)
     instance.setSelection(ed.selectedId)
+    instance.setPaint(ed.paint)
     setEngine(instance)
 
     return () => {
@@ -60,9 +68,11 @@ export function ViewportCanvas() {
   const selectedId = useEditorStore((s) => s.selectedId)
   const transformMode = useEditorStore((s) => s.transformMode)
   const subObjectMode = useEditorStore((s) => s.subObjectMode)
+  const paint = useEditorStore((s) => s.paint)
   useEffect(() => engine?.setSelection(selectedId), [selectedId, engine])
   useEffect(() => engine?.setTransformMode(transformMode), [transformMode, engine])
   useEffect(() => engine?.setSubObjectMode(subObjectMode), [subObjectMode, engine])
+  useEffect(() => engine?.setPaint(paint), [paint, engine])
 
   return (
     <div className="viewport" ref={containerRef}>
