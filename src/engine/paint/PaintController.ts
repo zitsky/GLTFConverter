@@ -30,6 +30,7 @@ export class PaintController {
   private painting = false
   private targets = new Map<string, Target>()
   private stroke: THREE.Mesh | null = null
+  private lastPx: { x: number; y: number } | null = null
 
   config: PaintConfig = { active: false, color: { r: 1, g: 0, b: 0 }, radius: 0.5, strength: 0.6 }
   onDragChange?: (dragging: boolean) => void
@@ -130,6 +131,7 @@ export class PaintController {
     if (!target) return
     this.painting = true
     this.stroke = hit.object as THREE.Mesh
+    this.lastPx = null
     this.onDragChange?.(true)
     this.stamp(target, hit)
   }
@@ -153,6 +155,7 @@ export class PaintController {
   private onUp(): void {
     if (!this.painting) return
     this.painting = false
+    this.lastPx = null
     this.onDragChange?.(false)
     if (this.stroke) {
       const t = this.targets.get(this.stroke.uuid)
@@ -161,40 +164,78 @@ export class PaintController {
     this.stroke = null
   }
 
-  /** Brush radius in texels, derived from the world radius and local UV density. */
-  private texelRadius(mesh: THREE.Mesh, hit: THREE.Intersection): number {
-    const face = hit.face
-    const geo = mesh.geometry
-    const pos = geo.getAttribute('position') as THREE.BufferAttribute | undefined
-    const uv = geo.getAttribute('uv') as THREE.BufferAttribute | undefined
-    if (face && pos && uv) {
-      const wa = mesh.localToWorld(new THREE.Vector3().fromBufferAttribute(pos, face.a))
-      const wb = mesh.localToWorld(new THREE.Vector3().fromBufferAttribute(pos, face.b))
-      const ua = new THREE.Vector2().fromBufferAttribute(uv, face.a)
-      const ub = new THREE.Vector2().fromBufferAttribute(uv, face.b)
-      const wlen = wa.distanceTo(wb)
-      const ulen = ua.distanceTo(ub)
-      if (wlen > 1e-6 && ulen > 1e-6) {
-        return THREE.MathUtils.clamp((this.config.radius * ulen) / wlen * TEX, 2, TEX)
-      }
-    }
-    return Math.max(4, this.config.radius * 160)
-  }
-
-  private stamp(target: Target, hit: THREE.Intersection): void {
+  /**
+   * Brush footprint in texel space. Uses the triangle's UV→world Jacobian so a
+   * world-radius circle on the surface maps to the correct (possibly elliptical)
+   * shape in the texture — correcting UV stretching so the brush stays round on
+   * the model regardless of geometry/unwrap.
+   */
+  private computeBrush(
+    mesh: THREE.Mesh,
+    hit: THREE.Intersection,
+  ): { px: number; py: number; rx: number; ry: number } {
     const uv = hit.uv!
     const px = uv.x * TEX
     const py = (1 - uv.y) * TEX
-    const r = this.texelRadius(hit.object as THREE.Mesh, hit)
+    const face = hit.face
+    const geo = mesh.geometry
+    const pos = geo.getAttribute('position') as THREE.BufferAttribute | undefined
+    const uvA = geo.getAttribute('uv') as THREE.BufferAttribute | undefined
+    const fallback = Math.max(4, this.config.radius * 160)
+    if (!face || !pos || !uvA) return { px, py, rx: fallback, ry: fallback }
+
+    const pa = mesh.localToWorld(new THREE.Vector3().fromBufferAttribute(pos, face.a))
+    const e1 = mesh.localToWorld(new THREE.Vector3().fromBufferAttribute(pos, face.b)).sub(pa)
+    const e2 = mesh.localToWorld(new THREE.Vector3().fromBufferAttribute(pos, face.c)).sub(pa)
+    const ua = new THREE.Vector2().fromBufferAttribute(uvA, face.a)
+    const d1 = new THREE.Vector2().fromBufferAttribute(uvA, face.b).sub(ua)
+    const d2 = new THREE.Vector2().fromBufferAttribute(uvA, face.c).sub(ua)
+
+    const det = d1.x * d2.y - d2.x * d1.y
+    if (Math.abs(det) < 1e-10) return { px, py, rx: fallback, ry: fallback }
+    // World displacement per unit uv.x / uv.y.
+    const mu = e1.clone().multiplyScalar(d2.y / det).add(e2.clone().multiplyScalar(-d1.y / det))
+    const mv = e1.clone().multiplyScalar(-d2.x / det).add(e2.clone().multiplyScalar(d1.x / det))
+    const lu = mu.length()
+    const lv = mv.length()
+    const R = this.config.radius
+    const rx = lu > 1e-6 ? THREE.MathUtils.clamp((R / lu) * TEX, 2, TEX) : fallback
+    const ry = lv > 1e-6 ? THREE.MathUtils.clamp((R / lv) * TEX, 2, TEX) : fallback
+    return { px, py, rx, ry }
+  }
+
+  private dab(ctx: CanvasRenderingContext2D, px: number, py: number, rx: number, ry: number): void {
     const c = this.config.color
     const rgb = `${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)}`
-    const grd = target.ctx.createRadialGradient(px, py, 0, px, py, r)
+    ctx.save()
+    ctx.translate(px, py)
+    ctx.scale(rx, ry)
+    const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, 1)
     grd.addColorStop(0, `rgba(${rgb},${this.config.strength})`)
     grd.addColorStop(1, `rgba(${rgb},0)`)
-    target.ctx.fillStyle = grd
-    target.ctx.beginPath()
-    target.ctx.arc(px, py, r, 0, Math.PI * 2)
-    target.ctx.fill()
+    ctx.fillStyle = grd
+    ctx.beginPath()
+    ctx.arc(0, 0, 1, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+
+  private stamp(target: Target, hit: THREE.Intersection): void {
+    const { px, py, rx, ry } = this.computeBrush(hit.object as THREE.Mesh, hit)
+    if (this.lastPx) {
+      // Interpolate dabs along the stroke so it's continuous (no striping).
+      const dx = px - this.lastPx.x
+      const dy = py - this.lastPx.y
+      const dist = Math.hypot(dx, dy)
+      const step = Math.max(1, Math.min(rx, ry) * 0.35)
+      const n = Math.min(64, Math.max(1, Math.ceil(dist / step)))
+      for (let i = 1; i <= n; i++) {
+        this.dab(target.ctx, this.lastPx.x + (dx * i) / n, this.lastPx.y + (dy * i) / n, rx, ry)
+      }
+    } else {
+      this.dab(target.ctx, px, py, rx, ry)
+    }
+    this.lastPx = { x: px, y: py }
     target.texture.needsUpdate = true
   }
 
