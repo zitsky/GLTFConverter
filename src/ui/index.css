@@ -400,6 +400,15 @@ input[type='checkbox'] {
   background: var(--border);
   margin: 0 3px;
 }
+.uv-num {
+  width: 52px;
+  padding: 2px 4px;
+  font-size: 11px;
+  background: #0e1118;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
 .uv-canvas {
   display: block;
   width: 100%;
