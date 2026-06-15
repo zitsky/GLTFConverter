@@ -10,6 +10,7 @@ import { PickingService } from './picking/PickingService.ts'
 import { SelectionManager } from './selection/SelectionManager.ts'
 import { TransformGizmo } from './gizmos/TransformGizmo.ts'
 import type { TransformMode } from './gizmos/TransformGizmo.ts'
+import { PivotHandle } from './gizmos/PivotHandle.ts'
 import { VertexEditor } from './subobject/VertexEditor.ts'
 import type { SubObjectMode } from './subobject/SubObjectMode.ts'
 import { LightGizmos } from './helpers/LightGizmos.ts'
@@ -59,6 +60,7 @@ export class Engine {
   private vertexEditor: VertexEditor
   private lightGizmos: LightGizmos
   private lightControls: LightControls
+  private pivot: PivotHandle
   private paint: PaintController
   private viewHelper: ViewHelper
   private clock = new THREE.Clock()
@@ -137,6 +139,15 @@ export class Engine {
       },
     }
 
+    this.pivot = new PivotHandle(this.scene, this.viewport.camera, this.renderer.domElement)
+    this.pivot.onDragChange = (d) => {
+      this.viewport.controls.enabled = !d
+    }
+    this.pivot.onCommit = (object) => {
+      const id = object.userData.nodeId as NodeId | undefined
+      if (id) this.callbacks.onTransformCommit?.(id, readTransform(object))
+    }
+
     this.paint = new PaintController(
       this.scene,
       this.viewport.camera,
@@ -200,6 +211,7 @@ export class Engine {
     } else {
       this.gizmo.setEnabled(false)
       this.gizmo.detach()
+      this.pivot.detach()
       this.vertexEditor.setMode(mode)
       this.refreshVertexEditor()
     }
@@ -267,6 +279,12 @@ export class Engine {
       this.lightControls.attach(this.selectedId, obj)
     } else {
       this.lightControls.detach()
+    }
+    // Pivot handle for non-light objects (lights have their own handles).
+    if (obj && !(obj instanceof THREE.Light) && !this.paint.isActive()) {
+      this.pivot.attach(obj)
+    } else {
+      this.pivot.detach()
     }
   }
 
@@ -380,7 +398,12 @@ export class Engine {
       // Let the navigation gizmo consume clicks in its corner first.
       if (this.viewHelper.handleClick(e)) return
       if (this.paint.isActive()) return // paint owns the pointer
-      if (this.gizmoDragging || this.vertexEditor.isDragging() || this.lightControls.isDragging())
+      if (
+        this.gizmoDragging ||
+        this.vertexEditor.isDragging() ||
+        this.lightControls.isDragging() ||
+        this.pivot.isDragging()
+      )
         return
       const moved = Math.hypot(e.clientX - this.pointerDown.x, e.clientY - this.pointerDown.y)
       if (moved > 5) return // it was an orbit drag
@@ -405,6 +428,7 @@ export class Engine {
       this.selection.update()
       this.lightGizmos.update()
       this.lightControls.update()
+      this.pivot.update()
       this.renderer.render(this.scene, this.viewport.camera)
       // ViewHelper renders into a corner; without this its internal render() would
       // autoClear the whole color buffer and wipe the main scene.
@@ -420,6 +444,7 @@ export class Engine {
     this.viewHelper.dispose()
     this.lightGizmos.dispose()
     this.lightControls.dispose()
+    this.pivot.dispose()
     this.paint.dispose()
     this.wireMaterial.dispose()
     this.gizmo.dispose()
