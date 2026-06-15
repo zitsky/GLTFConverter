@@ -22,7 +22,7 @@ export interface EngineCallbacks {
   onTransformCommit?: (nodeId: NodeId, transform: Transform) => void
   onGeometryCommit?: (nodeId: NodeId) => void
   onLightIntensity?: (nodeId: NodeId, intensity: number) => void
-  onPaintCommit?: (nodeId: NodeId, color: number[]) => void
+  onPaintCommit?: (nodeId: NodeId, dataUrl: string) => void
 }
 
 export type ViewDir = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'iso'
@@ -146,12 +146,9 @@ export class Engine {
     this.paint.onDragChange = (d) => {
       this.viewport.controls.enabled = !d
     }
-    this.paint.onCommit = (mesh) => {
+    this.paint.onCommit = (mesh, dataUrl) => {
       const id = this.sync.nodeIdOf(mesh)
-      const col = mesh.geometry.getAttribute('color')
-      if (id && col) {
-        this.callbacks.onPaintCommit?.(id, Array.from(col.array as ArrayLike<number>))
-      }
+      if (id) this.callbacks.onPaintCommit?.(id, dataUrl)
     }
 
     this.sync.sync(project)

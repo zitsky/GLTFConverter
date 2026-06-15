@@ -263,21 +263,33 @@ export const useProjectStore = create<ProjectState>()(
           p.environment.background = color
         }),
 
-      undo: () =>
+      undo: () => {
+        const { past, project } = get()
+        if (past.length === 0) return
+        // Snapshot current (non-draft) state before mutating the draft —
+        // structuredClone can't clone an immer draft Proxy.
+        const snapshot = cloneProject(project)
         set((s) => {
           const prev = s.past.pop()
           if (!prev) return
-          s.future.unshift(cloneProject(s.project as Project))
-          s.project = prev
-        }),
+          s.future.unshift(snapshot)
+          s.project = prev as Project
+          s.dirty = true
+        })
+      },
 
-      redo: () =>
+      redo: () => {
+        const { future, project } = get()
+        if (future.length === 0) return
+        const snapshot = cloneProject(project)
         set((s) => {
           const next = s.future.shift()
           if (!next) return
-          s.past.push(cloneProject(s.project as Project))
-          s.project = next
-        }),
+          s.past.push(snapshot)
+          s.project = next as Project
+          s.dirty = true
+        })
+      },
 
       canUndo: () => get().past.length > 0,
       canRedo: () => get().future.length > 0,

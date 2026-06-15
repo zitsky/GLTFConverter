@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Engine } from '../../engine/Engine.ts'
 import { ViewportOverlay } from './ViewportOverlay.tsx'
 import { isMeshNode } from '../../domain/nodes/SceneNode.ts'
+import { newAssetId } from '../../domain/scene/ids.ts'
 import { useEditorStore } from '../../state/useEditorStore.ts'
 import { useEngineStore } from '../../state/useEngineStore.ts'
 import { useProjectStore } from '../../state/useProjectStore.ts'
@@ -23,12 +24,32 @@ export function ViewportCanvas() {
         useProjectStore.getState().setTransform(id, transform),
       onLightIntensity: (id, intensity) =>
         useProjectStore.getState().updateLight(id, { intensity }),
-      onPaintCommit: (id, color) => {
-        const node = useProjectStore.getState().project.scene.nodes[id]
+      onPaintCommit: (id, dataUrl) => {
+        const store = useProjectStore.getState()
+        const node = store.project.scene.nodes[id]
         if (!node || !isMeshNode(node)) return
-        useProjectStore.getState().setGeometryColor(node.geometryId, color)
         const matId = node.materialIds[0]
-        if (matId) useProjectStore.getState().updateMaterial(matId, { vertexColors: true })
+        if (!matId) return
+        const mat = store.project.assets.materials[matId]
+        // Reuse the material's existing map texture asset, else create one.
+        const texId = mat?.map ?? newAssetId()
+        if (mat?.map) {
+          store.updateTexture(texId, { url: dataUrl })
+        } else {
+          store.addTexture({
+            id: texId,
+            name: 'Painted',
+            url: dataUrl,
+            wrapS: 'repeat',
+            wrapT: 'repeat',
+            flipY: true,
+            colorSpace: 'srgb',
+            repeat: { x: 1, y: 1 },
+            offset: { x: 0, y: 0 },
+          })
+          store.setMaterialTexture(matId, 'map', texId)
+        }
+        store.updateMaterial(matId, { color: { r: 1, g: 1, b: 1 }, vertexColors: false })
       },
       onGeometryCommit: (id) => {
         const geo = instance.getMeshGeometry(id)
