@@ -570,22 +570,41 @@ Object.assign( JSONLoader.prototype, {
 
             geometry.computeFaceNormals();
             geometry.computeBoundingSphere();
-            console.log(geometry)
+
+            // Legacy faceVertexUvs are per-face-corner (3 independent uvs per
+            // face), which can't live on an indexed/shared-vertex geometry. Mirror
+            // the old Geometry.toBufferGeometry() behaviour: expand to a
+            // NON-indexed geometry so each face owns its 3 vertices + 3 uvs and the
+            // unwrap stays intact (an indexed conversion scrambles the uvs).
             const gbg = new BufferGeometry();
-            gbg.setFromPoints(geometry.vertices);
-            gbg.setIndex(geometry.faces.reduce(function(a, b) {
-                a.push(b.a);
-                a.push(b.b);
-                a.push(b.c);
-                return a;
-            }, []));
+            const faces = geometry.faces;
+            const verts = geometry.vertices;
+            const faceUvs = geometry.faceVertexUvs[ 0 ] || [];
+            const hasUv = faceUvs.length === faces.length;
 
-            gbg.setAttribute('uv', new Float32BufferAttribute(geometry.faceVertexUvs[0].reduce(function(a,b){
-                a.push(b[0].x);
-                a.push(b[0].y);
-                return a;
-            }, []), 2));
+            const positions = [];
+            const uvs = [];
+            for ( var f = 0; f < faces.length; f ++ ) {
 
+                var face = faces[ f ];
+                var va = verts[ face.a ], vb = verts[ face.b ], vc = verts[ face.c ];
+                positions.push( va.x, va.y, va.z, vb.x, vb.y, vb.z, vc.x, vc.y, vc.z );
+
+                if ( hasUv ) {
+
+                    var uv = faceUvs[ f ];
+                    if ( uv && uv.length === 3 ) {
+                        uvs.push( uv[ 0 ].x, uv[ 0 ].y, uv[ 1 ].x, uv[ 1 ].y, uv[ 2 ].x, uv[ 2 ].y );
+                    } else {
+                        uvs.push( 0, 0, 0, 0, 0, 0 );
+                    }
+
+                }
+
+            }
+
+            gbg.setAttribute( 'position', new Float32BufferAttribute( positions, 3 ) );
+            if ( hasUv ) gbg.setAttribute( 'uv', new Float32BufferAttribute( uvs, 2 ) );
 
             gbg.computeVertexNormals();
             gbg.computeBoundingSphere();
