@@ -241,16 +241,24 @@ export class VertexEditor {
       this.refreshColors()
     }
 
-    // Begin a move on a camera-facing plane through the picked point.
+    // Drag on a camera-facing plane through the picked element's centroid.
     const anchor = new THREE.Vector3()
-    anchor.fromBufferAttribute(
-      this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute,
-      hits[0],
-    )
+    const tmp = new THREE.Vector3()
+    const posAttr = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+    for (const i of hits) {
+      anchor.add(tmp.fromBufferAttribute(posAttr, i))
+    }
+    anchor.multiplyScalar(1 / hits.length)
     this.mesh.localToWorld(anchor)
     const normal = this.camera.getWorldDirection(new THREE.Vector3()).negate()
     this.dragPlane.setFromNormalAndCoplanarPoint(normal, anchor)
-    this.dragPrev.copy(anchor)
+    // Anchor the drag at the actual grab point (ray∩plane), not a vertex, so the
+    // selection doesn't jump sideways on the first move.
+    this.setRay(e)
+    const grab = new THREE.Vector3()
+    this.dragPrev.copy(
+      this.raycaster.ray.intersectPlane(this.dragPlane, grab) ? grab : anchor,
+    )
     this.dragging = true
     this.onDragChange?.(true)
   }
