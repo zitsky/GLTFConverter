@@ -582,8 +582,17 @@ Object.assign( JSONLoader.prototype, {
             const faceUvs = geometry.faceVertexUvs[ 0 ] || [];
             const hasUv = faceUvs.length === faces.length;
 
+            // Use the authored per-vertex normals when the file carries them
+            // (this is where the legacy format encodes smoothing — there are no
+            // separate "smoothing groups", smooth vs hard edges are baked into
+            // whether adjacent faces share a normal). Fall back to flat normals.
+            const hasNormals = faces.length > 0 && faces.every( function ( f ) {
+                return f.vertexNormals && f.vertexNormals.length === 3;
+            } );
+
             const positions = [];
             const uvs = [];
+            const normals = [];
             for ( var f = 0; f < faces.length; f ++ ) {
 
                 var face = faces[ f ];
@@ -601,12 +610,24 @@ Object.assign( JSONLoader.prototype, {
 
                 }
 
+                if ( hasNormals ) {
+
+                    var n = face.vertexNormals;
+                    normals.push( n[ 0 ].x, n[ 0 ].y, n[ 0 ].z, n[ 1 ].x, n[ 1 ].y, n[ 1 ].z, n[ 2 ].x, n[ 2 ].y, n[ 2 ].z );
+
+                }
+
             }
 
             gbg.setAttribute( 'position', new Float32BufferAttribute( positions, 3 ) );
             if ( hasUv ) gbg.setAttribute( 'uv', new Float32BufferAttribute( uvs, 2 ) );
 
-            gbg.computeVertexNormals();
+            if ( hasNormals ) {
+                gbg.setAttribute( 'normal', new Float32BufferAttribute( normals, 3 ) );
+            } else {
+                // No authored normals: flat shading (non-indexed -> per-face).
+                gbg.computeVertexNormals();
+            }
             gbg.computeBoundingSphere();
 
 
