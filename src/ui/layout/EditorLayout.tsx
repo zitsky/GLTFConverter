@@ -1,4 +1,5 @@
 import { useLayoutStore } from '../../state/useLayoutStore.ts'
+import { EditorFooter } from '../panels/EditorFooter.tsx'
 import { MenuBar } from '../panels/MenuBar.tsx'
 import { Toolbar } from '../panels/Toolbar.tsx'
 import { ViewportCanvas } from '../viewport/ViewportCanvas.tsx'
@@ -24,6 +25,7 @@ export function EditorLayout() {
       <PanelHost side="left" />
       <ViewportCanvas />
       <PanelHost side="right" />
+      <EditorFooter />
     </div>
   )
 }

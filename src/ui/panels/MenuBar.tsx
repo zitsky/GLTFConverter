@@ -53,8 +53,6 @@ export function MenuBar() {
 
   const selectedId = useEditorStore((s) => s.selectedId)
   const select = useEditorStore((s) => s.select)
-  const status = useEditorStore((s) => s.status)
-  const busy = useEditorStore((s) => s.busy)
   const setStatus = useEditorStore((s) => s.setStatus)
   const setBusy = useEditorStore((s) => s.setBusy)
   const removeNode = useProjectStore((s) => s.removeNode)
@@ -310,7 +308,6 @@ export function MenuBar() {
       </div>
 
       <span className="spacer" />
-      <span className="status">{busy ? '⏳ ' : ''}{status}</span>
     </div>
   )
 }
