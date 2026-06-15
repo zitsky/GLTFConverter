@@ -109,16 +109,16 @@ export class Engine {
     this.selection = new SelectionManager(this.scene)
     this.picking = new PickingService(this.renderer.domElement, this.viewport.camera)
     this.gizmo = new TransformGizmo(this.viewport.camera, this.renderer.domElement, this.scene)
-    this.vertexEditor = new VertexEditor(this.viewport.camera, this.renderer.domElement)
+    this.vertexEditor = new VertexEditor(this.viewport.camera, this.renderer.domElement, this.scene)
     this.lightGizmos = new LightGizmos(this.scene)
 
     // Blender-style navigation gizmo: rotates with the camera, click to snap.
     this.viewHelper = new ViewHelper(this.viewport.camera, this.renderer.domElement)
     this.viewHelper.center = this.viewport.controls.target
 
-    this.vertexEditor.onDragChange = (dragging) => {
-      this.viewport.controls.enabled = !dragging
-    }
+    // Sub-object selection drives the shared transform gizmo via a centroid proxy.
+    this.vertexEditor.gizmoBusy = () => this.gizmo.isEngaged()
+    this.vertexEditor.onSelectionChange = () => this.syncSubObjectGizmo()
     this.wireGizmo()
     this.wirePointer()
 
@@ -209,9 +209,10 @@ export class Engine {
       this.gizmo.setEnabled(true)
       this.refreshSelection()
     } else {
-      this.gizmo.setEnabled(false)
+      // Keep the gizmo enabled but retarget it onto the sub-object proxy.
       this.gizmo.detach()
       this.pivot.detach()
+      this.gizmo.setEnabled(true)
       this.vertexEditor.setMode(mode)
       this.refreshVertexEditor()
     }
@@ -297,6 +298,15 @@ export class Engine {
     } else {
       this.vertexEditor.deactivate()
     }
+    this.syncSubObjectGizmo()
+  }
+
+  /** Attach the transform gizmo to the sub-object proxy (or detach if empty). */
+  private syncSubObjectGizmo(): void {
+    if (this.subObjectMode === 'object') return
+    const target = this.vertexEditor.gizmoTarget()
+    if (target) this.gizmo.attach(target)
+    else this.gizmo.detach()
   }
 
   private applyEnvironment(project: Project): void {
@@ -365,8 +375,10 @@ export class Engine {
     if (config.active) {
       this.gizmo.detach()
       this.pivot.detach()
-    } else {
+    } else if (this.subObjectMode === 'object') {
       this.refreshSelection()
+    } else {
+      this.syncSubObjectGizmo()
     }
   }
 
@@ -391,9 +403,18 @@ export class Engine {
     this.gizmo.onDraggingChanged = (dragging) => {
       this.gizmoDragging = dragging
       this.viewport.controls.enabled = !dragging
+      if (this.subObjectMode !== 'object') {
+        if (dragging) this.vertexEditor.beginTransform()
+        else this.vertexEditor.endTransform()
+      }
     }
-    this.gizmo.onObjectChange = () => this.selection.update()
+    this.gizmo.onObjectChange = () => {
+      if (this.subObjectMode !== 'object') this.vertexEditor.applyTransform()
+      else this.selection.update()
+    }
     this.gizmo.onCommit = (object) => {
+      // Sub-object commits are handled in vertexEditor.endTransform().
+      if (this.subObjectMode !== 'object') return
       const id = object.userData.nodeId as NodeId | undefined
       if (!id) return
       this.callbacks.onTransformCommit?.(id, readTransform(object))
@@ -411,7 +432,6 @@ export class Engine {
       if (this.paint.isActive()) return // paint owns the pointer
       if (
         this.gizmoDragging ||
-        this.vertexEditor.isDragging() ||
         this.lightControls.isDragging() ||
         this.pivot.isDragging()
       )

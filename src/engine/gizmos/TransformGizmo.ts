@@ -47,6 +47,11 @@ export class TransformGizmo {
     this.controls.getHelper().visible = enabled
   }
 
+  /** True while a handle is hovered or being dragged (so other pickers stand down). */
+  isEngaged(): boolean {
+    return this.controls.dragging || this.controls.axis != null
+  }
+
   /** Grid snapping; pass null to disable. */
   setSnap(translation: number | null): void {
     this.controls.setTranslationSnap(translation)

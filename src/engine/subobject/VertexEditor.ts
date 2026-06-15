@@ -7,9 +7,11 @@ const PICK_PX = 9
 const EDGE_PX = 7
 
 /**
- * Sub-object mesh editor: select vertices / edges / polygons and move the
- * selection in the viewport. Selection is stored as a vertex-index set so moves
- * are uniform across modes.
+ * Sub-object mesh editor: select vertices / edges / polygons. The selection is
+ * transformed with the shared TransformControls gizmo (translate / rotate /
+ * scale) via a proxy object placed at the selection centroid — the engine drives
+ * begin/apply/end as the gizmo is dragged. Selection is stored as a vertex-index
+ * set so moves are uniform across modes.
  */
 export class VertexEditor {
   private points: THREE.Points | null = null
@@ -20,25 +22,31 @@ export class VertexEditor {
   private selection = new Set<number>()
   private raycaster = new THREE.Raycaster()
   private pointer = new THREE.Vector2()
-  private dragPlane = new THREE.Plane()
-  private dragPrev = new THREE.Vector3()
-  private dragging = false
   private moved = false
-  private downX = 0
-  private downY = 0
+
+  /** Empty object the gizmo attaches to; sits at the selection centroid. */
+  private proxy = new THREE.Object3D()
+  private gStart = new THREE.Matrix4()
+  private gStartInv = new THREE.Matrix4()
+  private gWorld: { i: number; v: THREE.Vector3 }[] = []
   private onCommit: (() => void) | null = null
 
-  onDragChange?: (dragging: boolean) => void
+  /** Re-attach/detach the gizmo when the picked sub-object set changes. */
+  onSelectionChange?: () => void
+  /** True while a gizmo handle is engaged, so picking stands down. */
+  gizmoBusy?: () => boolean
 
   private downHandler = (e: PointerEvent) => this.onPointerDown(e)
   private moveHandler = (e: PointerEvent) => this.onPointerMove(e)
-  private upHandler = (e: PointerEvent) => this.onPointerUp(e)
 
   constructor(
     private readonly camera: THREE.Camera,
     private readonly dom: HTMLElement,
+    scene: THREE.Scene,
   ) {
     this.raycaster.params.Points = { threshold: 0.12 }
+    this.proxy.name = '__subobj_proxy'
+    scene.add(this.proxy)
   }
 
   setMode(mode: SubObjectMode): void {
@@ -104,7 +112,6 @@ export class VertexEditor {
 
     this.dom.addEventListener('pointerdown', this.downHandler)
     this.dom.addEventListener('pointermove', this.moveHandler)
-    this.dom.addEventListener('pointerup', this.upHandler)
   }
 
   deactivate(): void {
@@ -119,13 +126,20 @@ export class VertexEditor {
     this.hoverFace = null
     this.dom.removeEventListener('pointerdown', this.downHandler)
     this.dom.removeEventListener('pointermove', this.moveHandler)
-    this.dom.removeEventListener('pointerup', this.upHandler)
     this.mesh = null
-    this.dragging = false
+    this.selection.clear()
+    this.gWorld = []
   }
 
-  isDragging(): boolean {
-    return this.dragging
+  hasSelection(): boolean {
+    return Boolean(this.mesh) && this.selection.size > 0
+  }
+
+  /** The object the gizmo should attach to (proxy at selection centroid), or null. */
+  gizmoTarget(): THREE.Object3D | null {
+    if (!this.mesh || this.selection.size === 0) return null
+    this.updateProxy()
+    return this.proxy
   }
 
   private refreshColors(): void {
@@ -208,10 +222,9 @@ export class VertexEditor {
 
   private onPointerDown(e: PointerEvent): void {
     if (!this.mesh || !this.points || e.button !== 0) return
+    // A press on a gizmo handle owns the gesture; don't repick the selection.
+    if (this.gizmoBusy?.()) return
     const [px, py] = this.localPx(e)
-    this.downX = e.clientX
-    this.downY = e.clientY
-    this.moved = false
 
     let hits: number[] | null = null
     if (this.mode === 'vertex') {
@@ -230,6 +243,7 @@ export class VertexEditor {
       if (!e.shiftKey) {
         this.selection.clear()
         this.refreshColors()
+        this.onSelectionChange?.()
       }
       return
     }
@@ -240,27 +254,62 @@ export class VertexEditor {
       for (const i of hits) this.selection.add(i)
       this.refreshColors()
     }
+    // Re-place the gizmo at the (new) selection centroid.
+    this.onSelectionChange?.()
+  }
 
-    // Drag on a camera-facing plane through the picked element's centroid.
-    const anchor = new THREE.Vector3()
-    const tmp = new THREE.Vector3()
-    const posAttr = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute
-    for (const i of hits) {
-      anchor.add(tmp.fromBufferAttribute(posAttr, i))
+  /** Centre the gizmo proxy on the selection (identity rotation/scale). */
+  private updateProxy(): void {
+    if (!this.mesh || this.selection.size === 0) return
+    const attr = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+    const c = new THREE.Vector3()
+    const t = new THREE.Vector3()
+    for (const i of this.selection) c.add(t.fromBufferAttribute(attr, i))
+    c.multiplyScalar(1 / this.selection.size)
+    this.mesh.localToWorld(c)
+    this.proxy.position.copy(c)
+    this.proxy.quaternion.identity()
+    this.proxy.scale.set(1, 1, 1)
+    this.proxy.updateMatrixWorld(true)
+  }
+
+  /** Snapshot proxy pose + selected vertex world positions at gizmo drag-start. */
+  beginTransform(): void {
+    if (!this.mesh) return
+    this.proxy.updateMatrixWorld(true)
+    this.gStart.copy(this.proxy.matrixWorld)
+    this.gStartInv.copy(this.gStart).invert()
+    const attr = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+    this.gWorld = [...this.selection].map((i) => ({
+      i,
+      v: this.mesh!.localToWorld(new THREE.Vector3().fromBufferAttribute(attr, i)),
+    }))
+    this.moved = false
+  }
+
+  /** Apply the proxy's current pose (relative to drag-start) to the selection. */
+  applyTransform(): void {
+    if (!this.mesh || this.gWorld.length === 0) return
+    this.moved = true
+    this.proxy.updateMatrixWorld(true)
+    const rel = new THREE.Matrix4().multiplyMatrices(this.proxy.matrixWorld, this.gStartInv)
+    const attr = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+    const w = new THREE.Vector3()
+    for (const { i, v } of this.gWorld) {
+      w.copy(v).applyMatrix4(rel)
+      this.mesh.worldToLocal(w)
+      attr.setXYZ(i, w.x, w.y, w.z)
     }
-    anchor.multiplyScalar(1 / hits.length)
-    this.mesh.localToWorld(anchor)
-    const normal = this.camera.getWorldDirection(new THREE.Vector3()).negate()
-    this.dragPlane.setFromNormalAndCoplanarPoint(normal, anchor)
-    // Anchor the drag at the actual grab point (ray∩plane), not a vertex, so the
-    // selection doesn't jump sideways on the first move.
-    this.setRay(e)
-    const grab = new THREE.Vector3()
-    this.dragPrev.copy(
-      this.raycaster.ray.intersectPlane(this.dragPlane, grab) ? grab : anchor,
-    )
-    this.dragging = true
-    this.onDragChange?.(true)
+    attr.needsUpdate = true
+    this.mesh.geometry.computeVertexNormals()
+    this.mesh.geometry.computeBoundingSphere()
+  }
+
+  /** Commit the geometry edit (if any) and re-centre the proxy. */
+  endTransform(): void {
+    this.gWorld = []
+    if (this.moved) this.onCommit?.()
+    this.updateProxy()
   }
 
   private updateHover(e: PointerEvent): void {
@@ -300,40 +349,12 @@ export class VertexEditor {
 
   private onPointerMove(e: PointerEvent): void {
     if (!this.mesh || !this.points) return
-    if (!this.dragging) {
-      this.updateHover(e)
-      return
-    }
-    if (this.hoverLine) this.hoverLine.visible = false
-    if (this.hoverFace) this.hoverFace.visible = false
-    if (Math.hypot(e.clientX - this.downX, e.clientY - this.downY) > 2) this.moved = true
-    this.setRay(e)
-    const cur = new THREE.Vector3()
-    if (!this.raycaster.ray.intersectPlane(this.dragPlane, cur)) return
-    const localCur = this.mesh.worldToLocal(cur.clone())
-    const localPrev = this.mesh.worldToLocal(this.dragPrev.clone())
-    const dx = localCur.x - localPrev.x
-    const dy = localCur.y - localPrev.y
-    const dz = localCur.z - localPrev.z
-    const attr = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute
-    for (const i of this.selection) {
-      attr.setXYZ(i, attr.getX(i) + dx, attr.getY(i) + dy, attr.getZ(i) + dz)
-    }
-    attr.needsUpdate = true
-    this.mesh.geometry.computeVertexNormals()
-    this.mesh.geometry.computeBoundingSphere()
-    this.dragPrev.copy(cur)
-  }
-
-  private onPointerUp(_e: PointerEvent): void {
-    if (!this.dragging) return
-    this.dragging = false
-    this.onDragChange?.(false)
-    if (this.moved) this.onCommit?.()
+    this.updateHover(e)
   }
 
   dispose(): void {
     this.deactivate()
+    this.proxy.parent?.remove(this.proxy)
   }
 }
 
