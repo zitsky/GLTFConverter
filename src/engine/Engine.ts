@@ -203,6 +203,7 @@ export class Engine {
     } else {
       this.gizmo.setEnabled(false)
       this.gizmo.detach()
+      this.vertexEditor.setMode(mode)
       this.refreshVertexEditor()
     }
   }
