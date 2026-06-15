@@ -591,18 +591,13 @@ Object.assign( JSONLoader.prototype, {
             gbg.computeBoundingSphere();
 
 
-            if ( json.materials === undefined || json.materials.length === 0 ) {
-
-
-                return new Mesh(gbg, new MeshStandardMaterial({ color: 0xFFFFFF, metalness: 0.1, roughness: 0.8 }));
-
-            } else {
-
-                var materials = Loader.prototype.initMaterials( json.materials, this.resourcePath || path, this.crossOrigin );
-
-                return new Mesh(gbg,  materials );
-
-            }
+            // NOTE: legacy Loader.prototype.initMaterials was removed from three.
+            // The legacy material spec is no longer compatible, so geometry is
+            // imported with a neutral PBR material and materials are edited later.
+            return new Mesh(
+                gbg,
+                new MeshStandardMaterial({ color: 0xFFFFFF, metalness: 0.1, roughness: 0.8 })
+            );
 
         };
 
