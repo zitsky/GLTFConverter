@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { projectUV } from '../../application/scene/unwrap.ts'
 import type { ProjectionPlane } from '../../application/scene/unwrap.ts'
 import { isMeshNode } from '../../domain/nodes/SceneNode.ts'
@@ -32,10 +32,14 @@ interface GizmoBox {
   cv: number
 }
 interface DragSnap {
-  cu: number
+  cu: number // box centre (rotation pivot)
   cv: number
-  gu: number // grab offset from centre (u) — scale is relative to this, so no jump
+  au: number // scale anchor = the opposite corner/edge, which stays fixed
+  av: number
+  gu: number // grab offset from the anchor (scale is relative to this, no jump)
   gv: number
+  sclU: boolean // does the grabbed handle scale the U axis?
+  sclV: boolean
   verts: { i: number; u: number; v: number }[]
   startAng: number
 }
@@ -65,6 +69,9 @@ export function UVCanvas() {
 
   const showTexRef = useRef(true)
   const showGridRef = useRef(true)
+  const [lockAspect, setLockAspect] = useState(true)
+  const lockAspectRef = useRef(lockAspect)
+  lockAspectRef.current = lockAspect
 
   const uvRef = useRef<number[]>([])
   const geomIdRef = useRef<string | undefined>(undefined)
@@ -261,7 +268,7 @@ export function UVCanvas() {
     return null
   }
 
-  const beginGizmo = (px: number, py: number) => {
+  const beginGizmo = (handle: GizmoHandle, px: number, py: number) => {
     const b = gizmoBox()
     if (!b) return
     const verts = [...selRef.current].map((i) => ({
@@ -269,16 +276,31 @@ export function UVCanvas() {
       u: uvRef.current[i * 2],
       v: uvRef.current[i * 2 + 1],
     }))
+    // Anchor at the OPPOSITE corner/edge so it stays pinned while you drag.
+    let au = b.cu
+    let av = b.cv
+    let sclU = true
+    let sclV = true
+    switch (handle) {
+      case 'nw': au = b.maxU; av = b.minV; break
+      case 'ne': au = b.minU; av = b.minV; break
+      case 'se': au = b.minU; av = b.maxV; break
+      case 'sw': au = b.maxU; av = b.maxV; break
+      case 'e': au = b.minU; sclV = false; break
+      case 'w': au = b.maxU; sclV = false; break
+      case 'n': av = b.minV; sclU = false; break
+      case 's': av = b.maxV; sclU = false; break
+    }
     const [pu, pv] = toUV(px, py)
     dragRef.current.snap = {
       cu: b.cu, cv: b.cv,
-      gu: pu - b.cu, gv: pv - b.cv,
+      au, av, gu: pu - au, gv: pv - av, sclU, sclV,
       verts,
       startAng: Math.atan2(pv - b.cv, pu - b.cu),
     }
   }
 
-  /** Apply an absolute transform (from the drag-start snapshot) about the box centre. */
+  /** Apply an absolute transform (from the drag-start snapshot). */
   const applyGizmo = (px: number, py: number) => {
     const s = dragRef.current.snap
     if (!s) return
@@ -297,27 +319,21 @@ export function UVCanvas() {
         uv[i * 2 + 1] = s.cv + du * sn + dv * c
       }
     } else {
-      // Scale relative to the grab point: f = 1 where the pointer started, so an
-      // imprecise grab never jumps. Crossing the centre flips sign -> free mirror.
-      const du = pu - s.cu
-      const dv = pv - s.cv
-      const denU = Math.abs(s.gu) > 1e-6 ? s.gu : (s.gu < 0 ? -1e-6 : 1e-6)
-      const denV = Math.abs(s.gv) > 1e-6 ? s.gv : (s.gv < 0 ? -1e-6 : 1e-6)
-      let fu = 1
-      let fv = 1
-      if (kind === 'scale') {
-        const g = Math.hypot(s.gu, s.gv) || 1e-6
-        const f = Math.hypot(du, dv) / g
-        fu = f
-        fv = f
-      } else if (kind === 'scaleU') {
-        fu = du / denU
-      } else if (kind === 'scaleV') {
-        fv = dv / denV
+      // Scale about the anchor (opposite side stays fixed). Factor is relative to
+      // the grab point, so f = 1 at pointer-down (no jump); crossing the anchor
+      // flips sign -> mirror. Corners keep aspect when lockAspect is on.
+      const denU = Math.abs(s.gu) > 1e-6 ? s.gu : s.gu < 0 ? -1e-6 : 1e-6
+      const denV = Math.abs(s.gv) > 1e-6 ? s.gv : s.gv < 0 ? -1e-6 : 1e-6
+      let fu = s.sclU ? (pu - s.au) / denU : 1
+      let fv = s.sclV ? (pv - s.av) / denV : 1
+      if (s.sclU && s.sclV && lockAspectRef.current) {
+        const f = Math.max(Math.abs(fu), Math.abs(fv))
+        fu = fu < 0 ? -f : f
+        fv = fv < 0 ? -f : f
       }
       for (const { i, u, v } of s.verts) {
-        uv[i * 2] = s.cu + (u - s.cu) * fu
-        uv[i * 2 + 1] = s.cv + (v - s.cv) * fv
+        uv[i * 2] = s.au + (u - s.au) * fu
+        uv[i * 2 + 1] = s.av + (v - s.av) * fv
       }
     }
     draw()
@@ -514,7 +530,7 @@ export function UVCanvas() {
           : g === 'e' || g === 'w' ? 'scaleU'
             : g === 'n' || g === 's' ? 'scaleV'
               : 'scale'
-      beginGizmo(px, py)
+      beginGizmo(g, px, py)
       draw()
       return
     }
@@ -642,7 +658,20 @@ export function UVCanvas() {
   const commit = () => {
     if (!geometry) return
     setGeometryUV(geometry.id, [...uvRef.current])
-    useEngineStore.getState().engine?.invalidateGeometryCache()
+    // Update the live three geometry's UVs in place rather than invalidating the
+    // whole cache — a full rebuild reloads the model and drops the preview's
+    // highlighted selection. UV vertex count never changes, so set() is safe.
+    const engine = useEngineStore.getState().engine
+    const liveGeo = mesh ? engine?.getMeshGeometry(mesh.id) : null
+    const attr = liveGeo?.getAttribute('uv') as
+      | { array: Float32Array; needsUpdate: boolean }
+      | undefined
+    if (attr && attr.array.length === uvRef.current.length) {
+      attr.array.set(uvRef.current)
+      attr.needsUpdate = true
+    } else {
+      engine?.invalidateGeometryCache()
+    }
   }
 
   const transformSelected = (fn: (u: number, v: number, cu: number, cv: number) => [number, number]) => {
@@ -758,6 +787,15 @@ export function UVCanvas() {
         <button className="mini" title="Отразить по X" onClick={mirrorX}>⇄</button>
         <button className="mini" title="Отразить по Y" onClick={mirrorY}>⇅</button>
         <button className="mini" title="Вписать в 0–1" onClick={normalize}>0–1</button>
+        <span className="sep" />
+        <button
+          className={`mini${lockAspect ? ' active' : ''}`}
+          title="Сохранять пропорции при масштабе углом (вкл/выкл)"
+          aria-pressed={lockAspect}
+          onClick={() => setLockAspect((v) => !v)}
+        >
+          {lockAspect ? '▣' : '▢'} AR
+        </button>
         <span className="sep" />
         <button className="mini" onClick={() => { fit(); draw() }}>Вписать</button>
         <button className="mini" onClick={() => { selRef.current.clear(); pushSelection(); draw() }}>Снять</button>
