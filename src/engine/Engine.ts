@@ -23,7 +23,7 @@ export interface EngineCallbacks {
   onTransformCommit?: (nodeId: NodeId, transform: Transform) => void
   onGeometryCommit?: (nodeId: NodeId) => void
   onLightIntensity?: (nodeId: NodeId, intensity: number) => void
-  onPaintCommit?: (nodeId: NodeId, dataUrl: string) => void
+  onPaintCommit?: (nodeId: NodeId, dataUrl: string, matIndex: number) => void
 }
 
 export type ViewDir = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'iso'
@@ -157,9 +157,9 @@ export class Engine {
     this.paint.onDragChange = (d) => {
       this.viewport.controls.enabled = !d
     }
-    this.paint.onCommit = (mesh, dataUrl) => {
+    this.paint.onCommit = (mesh, dataUrl, matIndex) => {
       const id = this.sync.nodeIdOf(mesh)
-      if (id) this.callbacks.onPaintCommit?.(id, dataUrl)
+      if (id) this.callbacks.onPaintCommit?.(id, dataUrl, matIndex)
     }
 
     this.sync.sync(project)
@@ -200,6 +200,10 @@ export class Engine {
 
   setTransformMode(mode: TransformMode): void {
     this.gizmo.setMode(mode)
+  }
+
+  setUniformScale(on: boolean): void {
+    this.gizmo.setUniformScale(on)
   }
 
   setSubObjectMode(mode: SubObjectMode): void {
@@ -361,9 +365,9 @@ export class Engine {
   }
 
   /** Reuse a mesh's live paint canvas for its material on rebuilds (no reload flicker). */
-  pinPaintTexture(nodeId: NodeId, materialId: AssetId): void {
+  pinPaintTexture(nodeId: NodeId, materialId: AssetId, matIndex = 0): void {
     const mesh = this.sync.object3dFor(nodeId)
-    const tex = mesh instanceof THREE.Mesh ? this.paint.textureFor(mesh) : null
+    const tex = mesh instanceof THREE.Mesh ? this.paint.textureFor(mesh, matIndex) : null
     if (tex) this.sync.factory.paintOverrides.set(materialId, tex)
   }
 
