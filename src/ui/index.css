@@ -154,6 +154,12 @@ input[type='checkbox'] {
   align-items: center;
   gap: 14px;
 }
+.editor-footer .build {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  opacity: 0.7;
+  cursor: default;
+}
 .editor-footer a {
   color: var(--accent);
   text-decoration: none;
